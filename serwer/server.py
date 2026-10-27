@@ -1,35 +1,21 @@
 # -*- coding: utf-8 -*-
-"""Serwer prototypu: pliki statyczne z frontend/dist + API agenta (lokalny model Bielik) i znaku mObywatela.
+"""Serwer prototypu: pliki statyczne z frontend/dist + API agenta (darmowy model Cloudflare Workers AI)
+i znaku mObywatela.
 
 Uruchomienie: python3 serwer/server.py [port]   (domyślnie 8790)
-Bez kluczy API i bez płatnych usług: rozmowę obsługuje model uruchomiony lokalnie (Ollama), a mowę przeglądarka."""
+Bez płatnych usług: rozmowę prowadzi darmowy model otwarty z Workers AI na dzienny limit neuronów,
+a mowę obsługuje przeglądarka."""
 import json, os, sys, time, threading, traceback
 from http.server import ThreadingHTTPServer, SimpleHTTPRequestHandler
 from urllib.parse import urlparse, parse_qs
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT_DIR = os.path.dirname(HERE)
 sys.path.insert(0, HERE)
+import ustawienia
 
 
-def wczytaj_env(sciezka=os.path.join(ROOT_DIR, '.env')):
-    """Wczytuje pary KLUCZ=WARTOŚĆ z pliku .env; zmienne już ustawione w środowisku mają pierwszeństwo."""
-    try:
-        with open(sciezka, encoding='utf-8') as f:
-            for linia in f:
-                linia = linia.strip()
-                if not linia or linia.startswith('#') or '=' not in linia:
-                    continue
-                klucz, wartosc = linia.split('=', 1)
-                klucz = klucz.strip()
-                wartosc = wartosc.strip().strip('"').strip("'")
-                if klucz and klucz not in os.environ:
-                    os.environ[klucz] = wartosc
-    except FileNotFoundError:
-        pass
-
-
-wczytaj_env()
-import agent, tlumacz
+ENV_PLIK, ENV_KLUCZE = ustawienia.szukaj([ROOT_DIR, os.getcwd()])
+import agent, katalog, model, tlumacz
 
 ROOT = os.environ.get('MOCKUP') or os.path.join(os.path.dirname(HERE), 'frontend', 'dist')
 LOG = os.environ.get('AGENT_LOG') or os.path.join(HERE, 'agent.log')
@@ -70,13 +56,49 @@ def zdrowie():
     stan = agent.stan_modelu()
     return dict(
         agent=bool(stan['ok']),
-        provider=agent.PROVIDER,
-        model=agent.MODEL,
+        provider=agent.DOSTAWCA,
+        model=stan.get('model') or model.model(),
         modelGotowy=bool(stan['ok']),
-        bielik=bool(stan.get('bielik', agent.bielik.czy_bielik())),
+        bielik=bool(stan.get('bielik', model.czy_bielik())),
+        klucz=bool(stan.get('klucz')),
+        konto=bool(stan.get('konto')),
+        kontoOk=bool(model.KONTO_SPRAWDZONE),
+        kluczRodzaj=model.rodzaj_klucza(),
+        ostrzezenia=model.ostrzezenia(),
+        config=ustawienia.zrodlo(ENV_PLIK, ENV_KLUCZE),
         glos=dict(stt='przegladarka', tts='przegladarka'),
         stt=True,
         tts=True,
+        komunikat=stan.get('komunikat') or '',
+    )
+
+
+def katalog_modeli():
+    """Co wolno uruchomić, co jest wybrane i co z tego jest naprawdę widoczne na koncie Cloudflare."""
+    stan = agent.stan_modelu()
+    nazwa = stan.get('model') or model.model()
+    widoczne = stan.get('dostepne')
+    pozycje = []
+    for m in katalog.uporzadkuj(model.PREFERUJ):
+        d = m.jako_dict()
+        d['dostepny'] = widoczne is None or m.nazwa in widoczne
+        d['wybrany'] = m.nazwa == nazwa
+        pozycje.append(d)
+    return dict(
+        katalog=pozycje,
+        dostawca=agent.DOSTAWCA,
+        adres=model.adres(),
+        konto=model.KONTO_USTAWIONE,
+        kontoOk=model.KONTO_SPRAWDZONE,
+        config=ustawienia.zrodlo(ENV_PLIK, ENV_KLUCZE),
+        klucz=bool(model.KLUCZ_USTAWIONY),
+        model=nazwa,
+        bielik=bool(stan.get('bielik')),
+        auto=model.AUTO,
+        preferuj=model.PREFERUJ,
+        okno=model.NUM_CTX,
+        lista_znana=widoczne is not None,
+        dostepne=widoczne or [],
         komunikat=stan.get('komunikat') or '',
     )
 
@@ -111,9 +133,23 @@ class H(SimpleHTTPRequestHandler):
         return self.rfile.read(n) if n else b''
 
     def do_GET(self):
+        try:
+            return self.pobierz()
+        except agent.BladAPI as e:
+            log(dict(t='model_err', path=self.path, msg=str(e)))
+            return self.js(dict(error=str(e)), 503)
+        except (BrokenPipeError, ConnectionResetError):
+            return None
+        except Exception as e:
+            log(dict(t='err', path=self.path, msg=str(e), tb=traceback.format_exc()[-800:]))
+            return self.js(dict(error='Błąd serwera: %s' % e), 500)
+
+    def pobierz(self):
         p = urlparse(self.path).path
         if p == '/api/health':
             return self.js(zdrowie())
+        if p == '/api/modele':
+            return self.js(katalog_modeli())
         if p == '/api/i18n':
             lang = (parse_qs(urlparse(self.path).query).get('lang') or ['pl'])[0]
             d = tlumacz.slownik(lang) if lang in tlumacz.JEZYKI and lang != 'pl' else {}
@@ -207,6 +243,8 @@ class H(SimpleHTTPRequestHandler):
         except agent.BladAPI as e:
             log(dict(t='model_err', path=p, msg=str(e)))
             return self.js(dict(error=str(e)), 503)
+        except (BrokenPipeError, ConnectionResetError):
+            return None
         except Exception as e:
             log(dict(t='err', path=p, msg=str(e), tb=traceback.format_exc()[-800:]))
             return self.js(dict(error='Błąd serwera: %s' % e), 500)
@@ -236,10 +274,11 @@ def start():
         threading.Thread(target=wiedza._wczytaj, daemon=True).start()
     except Exception as e:
         print('wiedza:', e, flush=True)
-    threading.Thread(target=agent.rozgrzej, daemon=True).start()
     srv = ThreadingHTTPServer((host, port), H)
+    srv.daemon_threads = True
     print('mObywatel: http://%s:%d  (pliki: %s)' % ('127.0.0.1' if host in ('0.0.0.0', '::') else host, port, ROOT), flush=True)
-    print(agent.bielik.opis(), flush=True)
+    print('Konfiguracja: %s' % ustawienia.zrodlo(ENV_PLIK, ENV_KLUCZE), flush=True)
+    print(model.opis(), flush=True)
     srv.serve_forever()
 
 

@@ -1,8 +1,8 @@
 # -*- coding: utf-8 -*-
-"""Pętla agenta: lokalny model Bielik (Ollama) albo dowolne API zgodne z OpenAI + narzędzia.
+"""Pętla agenta: darmowy model z Cloudflare Workers AI + narzędzia.
 Bezstanowa: klient przechowuje historię rozmowy i stan świata."""
 import json, os, re, time, copy, urllib.request, urllib.error, html
-import dane, akcje, persony, threading, bielik
+import dane, akcje, persony, threading, katalog, model
 _JEZ = threading.local()
 from narzedzia import WSZYSTKIE, NAZWY_ODCZYTOW, NAZWY_AKCJI, NAZWY_UI, NAZWY_KLIENT
 
@@ -64,30 +64,19 @@ def md(t):
     t = re.sub(r'(?m)^\s*[-•]\s+', '• ', t)
     return t.replace('\n\n', '<br><br>').replace('\n', '<br>')
 
-class BladAPI(Exception): pass
+class BladAPI(Exception):
+    pass
 
-PROVIDER = bielik.PROVIDER
-OLLAMA_URL = bielik.OLLAMA_URL
-ZGODNY_BAZA = bielik.ZGODNY_BAZA
-MODEL = bielik.MODEL
-MODEL_API_KEY = bielik.MODEL_API_KEY
-MODEL_MAX_TOKENS = bielik.MAX_TOKENS
-MODEL_TIMEOUT = bielik.TIMEOUT
-MODEL_NUM_CTX = bielik.NUM_CTX
-MODEL_KEEP_ALIVE = bielik.KEEP_ALIVE
-ROZGRZEWANIE = bielik.ROZGRZEWANIE
+DOSTAWCA = 'cloudflare'
+MODEL_MAX_TOKENS = model.MAX_TOKENS
+MODEL_TIMEOUT = model.TIMEOUT
+MODEL_NUM_CTX = model.NUM_CTX
 MYSLI = re.compile(r'(?s)<think>.*?</think>\s*')
 _stan = {}
 _stan_lock = threading.Lock()
 
-TOOLS_OLLAMA = [{'type': 'function', 'function': {'name': t['name'], 'description': t['description'], 'parameters': t['input_schema']}}
-                for t in WSZYSTKIE]
-TOOLS_OPENAI = [{'type': 'function', 'function': {'name': t['name'], 'description': t['description'], 'parameters': t['input_schema']}}
-                for t in WSZYSTKIE]
-
-
-class BladAPI(Exception):
-    pass
+TOOLS = [{'type': 'function', 'function': {'name': t['name'], 'description': t['description'], 'parameters': t['input_schema']}}
+         for t in WSZYSTKIE]
 
 
 def _id9(x):
@@ -124,20 +113,26 @@ def do_chat(messages):
 
 
 def _blad_modelu(txt, kod=None):
-    """Zamienia odpowiedź serwera modelu na czytelny komunikat po polsku (bez przełączania na płatne API)."""
-    if kod == 404 and 'model' in (txt or '').lower():
-        return BladAPI('Model %s nie jest pobrany. Uruchom: ollama pull %s' % (MODEL, MODEL))
+    """Zamienia odpowiedź Cloudflare na czytelny komunikat po polsku (bez przełączania na płatne API)."""
+    tresc = (txt or '').lower()
     if kod in (401, 403):
-        return BladAPI('Serwer modelu odrzucił żądanie (kod %s). Sprawdź MODEL_API_KEY.' % kod)
+        return BladAPI('Cloudflare odrzucił żądanie (kod %s). Sprawdź token CLOUDFLARE_API_TOKEN (%s).'
+                       % (kod, model.klasa_klucza()))
     if kod == 429:
-        return BladAPI('Serwer modelu jest zajęty (za dużo żądań). Spróbuj za chwilę.')
+        if 'neuron' in tresc or 'capacity' in tresc or 'limit' in tresc:
+            return BladAPI('Skończył się dzienny limit darmowych neuronów Cloudflare (10 000 na dobę).'
+                           ' Limit odnawia się o północy UTC, a mniejszy model z katalogu zużywa go wolniej'
+                           ' (MODEL=auto).')
+        return BladAPI('Cloudflare jest zajęty (za dużo żądań). Spróbuj za chwilę.')
+    if kod == 404 or (kod == 400 and 'model' in tresc):
+        return BladAPI('Cloudflare nie udostępnia modelu %s na tym koncie. Wybierz inny z katalogu'
+                       ' (MODEL=auto): %s.'
+                       % (model.model() or '(brak)', ', '.join(m.nazwa for m in katalog.najszybsze(3))))
+    if kod in (408, 504):
+        return BladAPI('Model nie odpowiedział w czasie. Spróbuj jeszcze raz.')
     if kod:
-        return BladAPI('Serwer modelu zwrócił błąd %s: %s' % (kod, (txt or '')[:200]))
+        return BladAPI('Cloudflare zwrócił błąd %s: %s' % (kod, (txt or '')[:200]))
     return BladAPI(txt or 'brak odpowiedzi modelu')
-
-
-def _adres_modelu():
-    return OLLAMA_URL if PROVIDER != 'zgodny' else ZGODNY_BAZA
 
 
 def _podlacz(req, timeout):
@@ -148,14 +143,27 @@ def _podlacz(req, timeout):
     except urllib.error.HTTPError as e:
         raise _blad_modelu(e.read().decode('utf-8', 'replace'), e.code)
     except (urllib.error.URLError, ConnectionError, OSError) as e:
-        raise BladAPI('Nie mogę połączyć się z modelem pod adresem %s. Sprawdź, czy Ollama działa (ollama serve). (%s)'
-                      % (_adres_modelu(), getattr(e, 'reason', e)))
+        raise BladAPI('Nie mogę połączyć się z Cloudflare pod adresem %s. Sprawdź internet, CLOUDFLARE_ACCOUNT_ID'
+                      ' i CLOUDFLARE_API_TOKEN. (%s)' % (model.adres(), getattr(e, 'reason', e)))
 
 
 def _tekst_z_odpowiedzi(txt):
     if isinstance(txt, list):
         txt = ''.join(p.get('text', '') for p in txt if isinstance(p, dict))
     return MYSLI.sub('', txt or '').strip()
+
+
+def _odpowiedz(out):
+    """Wyciąga wiadomość i statystyki z odpowiedzi Cloudflare.
+
+    `/ai/v1/chat/completions` zwraca format OpenAI, a `/ai/run` opakowuje go w `result` i używa pola
+    `response`. Obsługujemy oba, żeby podmiana adresu nie wymagała zmian w kodzie.
+    """
+    dane = out.get('result') if isinstance(out.get('result'), dict) else out
+    msg = ((dane.get('choices') or [{}])[0] or {}).get('message') or {}
+    if not msg and dane.get('response') is not None:
+        msg = {'content': dane.get('response'), 'tool_calls': dane.get('tool_calls')}
+    return msg, dane
 
 
 def _wywolania(calls):
@@ -174,47 +182,21 @@ def _wywolania(calls):
     return out
 
 
-def ollama(messages, log):
-    """Rozmowa z modelem przez natywne API Ollamy (num_ctx, keep_alive, narzędzia)."""
-    body = dict(model=MODEL, messages=do_chat(messages), tools=TOOLS_OLLAMA, stream=False,
-                keep_alive=MODEL_KEEP_ALIVE, options=dict(bielik.OPCJE))
+def czat(messages, log):
+    """Rozmowa przez Cloudflare Workers AI (OpenAI Chat Completions).
+
+    Żądanie idzie z serwera z tokenem z `.env`, więc wnioskowanie nie odbywa się na tej maszynie.
+    """
+    nazwa = model.model()
+    if not nazwa:
+        raise BladAPI(model.komunikat_modelu() or 'Nie wybrano modelu')
+    body = dict(model=nazwa, messages=do_chat(messages), tools=TOOLS, tool_choice='auto',
+                parallel_tool_calls=False, **model.OPCJE)
+    naglowki = model.naglowki()
     ostatni = None
     for proba in range(2):
-        req = urllib.request.Request(OLLAMA_URL + '/api/chat', data=json.dumps(body).encode(),
-                                     headers={'Content-Type': 'application/json'})
-        t0 = time.time()
-        try:
-            out = _podlacz(req, MODEL_TIMEOUT)
-        except BladAPI as e:
-            ostatni = str(e)
-            if proba == 0 and 'Nie mogę połączyć' in ostatni:
-                time.sleep(1.0)
-                continue
-            raise
-        msg = out.get('message') or {}
-        content = []
-        txt = _tekst_z_odpowiedzi(msg.get('content'))
-        if txt:
-            content.append(dict(type='text', text=txt))
-        content += _wywolania(msg.get('tool_calls'))
-        log(dict(t='llm', model=out.get('model', MODEL), provider='ollama', ms=int((time.time() - t0) * 1000),
-                 usage=dict(input=out.get('prompt_eval_count'), output=out.get('eval_count')), stop=out.get('done_reason')))
-        return dict(content=content, stop_reason='tool_use' if any(b['type'] == 'tool_use' for b in content) else 'end_turn')
-    raise BladAPI(ostatni or 'brak odpowiedzi modelu')
-
-
-def zgodny(messages, log):
-    """Dowolne API zgodne z OpenAI Chat Completions (vLLM z szablonem czatu Bielika, llama.cpp, LM Studio)."""
-    if not MODEL:
-        raise BladAPI('PROVIDER=zgodny wymaga zmiennej MODEL')
-    body = dict(model=MODEL, messages=do_chat(messages), tools=TOOLS_OPENAI, tool_choice='auto',
-                parallel_tool_calls=False, stop=list(bielik.STOP), **bielik.OPCJE_ZGODNE)
-    naglowki = {'Content-Type': 'application/json'}
-    if MODEL_API_KEY:
-        naglowki['Authorization'] = 'Bearer ' + MODEL_API_KEY
-    ostatni = None
-    for proba in range(2):
-        req = urllib.request.Request(ZGODNY_BAZA + '/chat/completions', data=json.dumps(body).encode(), headers=naglowki)
+        req = urllib.request.Request(model.adres() + '/chat/completions', data=json.dumps(body).encode(),
+                                     headers=naglowki)
         t0 = time.time()
         try:
             out = _podlacz(req, MODEL_TIMEOUT)
@@ -227,14 +209,14 @@ def zgodny(messages, log):
                 time.sleep(1.0)
                 continue
             raise
-        msg = ((out.get('choices') or [{}])[0] or {}).get('message') or {}
+        msg, dane = _odpowiedz(out)
         content = []
         txt = _tekst_z_odpowiedzi(msg.get('content'))
         if txt:
             content.append(dict(type='text', text=txt))
         content += _wywolania(msg.get('tool_calls'))
-        u = out.get('usage') or {}
-        log(dict(t='llm', model=out.get('model', MODEL), provider='zgodny', ms=int((time.time() - t0) * 1000),
+        u = dane.get('usage') or {}
+        log(dict(t='llm', model=dane.get('model', nazwa), provider=DOSTAWCA, ms=int((time.time() - t0) * 1000),
                  usage=dict(input=u.get('prompt_tokens'), output=u.get('completion_tokens'))))
         return dict(content=content, stop_reason='tool_use' if any(b['type'] == 'tool_use' for b in content) else 'end_turn')
     raise BladAPI(ostatni or 'brak odpowiedzi modelu')
@@ -257,14 +239,14 @@ def _tylko_wyniki(wiadomosc):
 
 def zajete_tokeny():
     """Ile tokenów zjada to, czego przyciąć nie można: instrukcja systemowa i definicje narzędzi."""
-    return (len(system_prompt()) + len(json.dumps(TOOLS_OLLAMA, ensure_ascii=False))) // ZNACZNIKOW_NA_TOKEN
+    return (len(system_prompt()) + len(json.dumps(TOOLS, ensure_ascii=False))) // ZNACZNIKOW_NA_TOKEN
 
 
 def przytnij(messages, dostepne=None):
     """Zostawia najnowszą część historii mieszczącą się w oknie kontekstu.
 
     Okno musi pomieścić instrukcję systemową, opisy narzędzi i odpowiedź modelu, a historia rośnie
-    z każdą turą. Bez przycinania Ollama po cichu obcina początek promptu, więc Bielik traci instrukcję
+    z każdą turą. Bez przycinania dostawca po cichu obcina początek promptu, więc model traci instrukcję
     i przestaje wywoływać narzędzia.
     """
     dostepne = MODEL_NUM_CTX - MODEL_MAX_TOKENS - REZERWA_TOKENOW - zajete_tokeny() if dostepne is None else dostepne
@@ -283,67 +265,40 @@ def przytnij(messages, dostepne=None):
 
 def llm(messages, keys, log):
     try:
-        bielik.wymagaj_bielika()
+        model.sprawdz_model()
     except ValueError as e:
         raise BladAPI(str(e))
     przyciete = przytnij(messages)
     if len(przyciete) < len(messages):
         log(dict(t='kontekst', wszystkich=len(messages), wyslanych=len(przyciete), zajete=zajete_tokeny(), okno=MODEL_NUM_CTX))
-    if PROVIDER == 'zgodny':
-        return zgodny(przyciete, log)
-    return ollama(przyciete, log)
+    return czat(przyciete, log)
 
 
 def stan_modelu(odswiez=False):
-    """Czy model jest dostępny w lokalnym serwerze. Wynik trzymamy chwilę, żeby /api/health był szybki."""
+    """Czy model jest gotowy w Cloudflare. Wynik trzymamy chwilę, żeby /api/health był szybki."""
     with _stan_lock:
         teraz = time.time()
         if not odswiez and _stan and teraz - _stan.get('t', 0) < 5:
             return _stan
-        wynik = dict(t=teraz, ok=False, model=MODEL, provider=PROVIDER, bielik=bielik.czy_bielik(), komunikat='')
-        try:
-            if PROVIDER == 'zgodny':
-                with urllib.request.urlopen(ZGODNY_BAZA + '/models', timeout=4) as r:
-                    odp = json.loads(r.read())
-                dostepne = [m.get('id') for m in (odp.get('data') or [])]
-                wynik.update(ok=MODEL in dostepne, dostepne=dostepne)
-                if not wynik['ok']:
-                    wynik['komunikat'] = 'Model %s nie jest widoczny pod %s. Sprawdź MODEL.' % (MODEL, ZGODNY_BAZA)
-            else:
-                with urllib.request.urlopen(OLLAMA_URL + '/api/tags', timeout=4) as r:
-                    odp = json.loads(r.read())
-                dostepne = [m.get('name') for m in (odp.get('models') or [])]
-                wynik.update(ok=any(n == MODEL or n.split(':')[0] == MODEL.split(':')[0] for n in dostepne), dostepne=dostepne)
-                if not wynik['ok']:
-                    wynik['komunikat'] = 'Model %s nie jest pobrany. Uruchom: ollama pull %s' % (MODEL, MODEL)
-        except Exception as e:
-            if PROVIDER == 'zgodny':
-                wynik['komunikat'] = 'Nie mogę połączyć się z serwerem modelu %s (%s)' % (ZGODNY_BAZA, e)
-            else:
-                wynik['komunikat'] = 'Nie mogę połączyć się z Ollamą pod %s. Uruchom: ollama serve' % OLLAMA_URL
-        if not wynik['bielik']:
-            wynik['komunikat'] = bielik.komunikat_modelu()
-            if bielik.TYLKO_BIELIK:
-                wynik['ok'] = False
+        nazwa = model.model(odswiez)
+        wynik = dict(t=teraz, ok=False, model=nazwa, provider=DOSTAWCA,
+                     bielik=model.czy_bielik(nazwa), klucz=model.KLUCZ_USTAWIONY,
+                     konto=model.KONTO_USTAWIONE, komunikat='')
+        widoczne = model.dostepne()
+        if widoczne:
+            wynik['dostepne'] = widoczne
+        if nazwa and (widoczne is None or nazwa in widoczne):
+            wynik['ok'] = True
+        elif nazwa:
+            wynik['komunikat'] = ('Model %s nie jest dostępny na koncie Cloudflare. Ustaw MODEL=auto.'
+                                  % nazwa)
+        ostrzezenie = model.komunikat_modelu(nazwa) if nazwa else ''
+        if ostrzezenie:
+            wynik['komunikat'] = ostrzezenie
+            wynik['ok'] = False
         _stan.clear()
         _stan.update(wynik)
         return wynik
-
-
-def rozgrzej():
-    """Wczytuje model do pamięci, żeby pierwsza odpowiedź nie czekała na ładowanie wag."""
-    if not ROZGRZEWANIE or PROVIDER == 'zgodny':
-        return
-    try:
-        body = dict(model=MODEL, messages=[{'role': 'user', 'content': 'Dzień dobry'}], stream=False,
-                    keep_alive=MODEL_KEEP_ALIVE,
-                    options=dict(num_ctx=MODEL_NUM_CTX, num_predict=8, temperature=bielik.TEMPERATURE))
-        req = urllib.request.Request(OLLAMA_URL + '/api/chat', data=json.dumps(body).encode(),
-                                     headers={'Content-Type': 'application/json'})
-        with urllib.request.urlopen(req, timeout=MODEL_TIMEOUT) as r:
-            r.read()
-    except Exception:
-        pass
 
 
 WYCIEK = re.compile(r'\s*(?:to=)?functions\.(\w+)\s*(\{.*?\})', re.S)
@@ -352,7 +307,7 @@ NAZWY_NARZEDZI = {t['name'] for t in WSZYSTKIE}
 
 
 def _wywolanie_z_jsonu(tekst):
-    """Bielik czasem odpowiada wyłącznie JSON-em {"name": ..., "arguments": {...}} zamiast tool_calls.
+    """Model czasem odpowiada wyłącznie JSON-em {"name": ..., "arguments": {...}} zamiast tool_calls.
 
     Zwraca (wywołanie, tekst_bez_jsonu) albo (None, tekst).
     """
@@ -381,8 +336,8 @@ def _wywolanie_z_jsonu(tekst):
 def napraw_wyciek(content):
     """Zamienia wywołanie narzędzia wypisane w tekście na prawdziwe wywołanie.
 
-    Obsługuje dwa warianty, które zdarzają się Bielikowi: `to=functions.x {...}` oraz sam JSON
-    {"name": ..., "arguments": {...}} (tak działa modelfile Bielika dla narzędzi).
+    Obsługuje dwa warianty typowe dla modeli czatu z formatem ChatML: `to=functions.x {...}` oraz sam JSON
+    {"name": ..., "arguments": {...}} (tak działa szablon czatu tych modeli).
     """
     out = []
     for b in content:
@@ -411,7 +366,7 @@ def napraw_wyciek(content):
 
 OBCE = re.compile('[\u0370-\u03ff\u0400-\u052f\u0590-\u06ff\u10a0-\u10ff\u3040-\u30ff\u4e00-\u9fff]')
 def popraw_jezyk(text):
-    """Bielik pisze po polsku; gdy mimo to wtrąci obce słowo albo alfabet, usuwamy je lokalnie, bez dodatkowych wywołań."""
+    """Model pisze po polsku; gdy mimo to wtrąci obce słowo albo alfabet, usuwamy je lokalnie, bez dodatkowych wywołań."""
     if not OBCE.search(text):
         return text
     for obce, polskie in {'Если': 'Jeśli', 'если': 'jeśli', 'или': 'lub', 'нет': 'nie', 'да': 'tak', 'но': 'ale', 'и': 'i'}.items():
@@ -456,7 +411,7 @@ KONIEC = re.compile(r'\b(to wszystko|to by było wszystko|nic więcej|do widzeni
 def run(messages, stan, confirm=None, log=lambda x: None, osoba=None, jezyk='pl'):
     """Zwraca (messages, stan, events, czeka). osoba: id persony (persony.py), jezyk: kod języka interfejsu.
 
-    Agent rozmawia wyłącznie po polsku na lokalnym modelu Bielik. Interfejs tłumaczą słowniki w serwer/i18n,
+    Agent rozmawia wyłącznie po polsku na modelu z Cloudflare Workers AI. Interfejs tłumaczą słowniki w serwer/i18n,
     a treści z rejestrów zostają po polsku (nie ma tłumaczenia maszynowego i płatnych API)."""
     ostatnia = messages[-1]['content'] if messages and not confirm and isinstance(messages[-1].get('content'), str) else ''
     m, s, ev, cz = _run(messages, stan, confirm, log, osoba)

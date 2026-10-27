@@ -2,7 +2,7 @@
 """Wersje językowe interfejsu: słowniki z katalogu serwer/i18n i rejestr tekstów, których jeszcze nie ma.
 
 Interfejs tłumaczą gotowe słowniki. Tłumaczenia maszynowego nie ma: tekst bez tłumaczenia zostaje po polsku
-i trafia do rejestru _zrodla.json. Asystent (Bielik) rozmawia po polsku, więc nie tłumaczymy rozmowy w locie.
+i trafia do rejestru _zrodla.json. Asystent rozmawia po polsku, więc nie tłumaczymy rozmowy w locie.
 Teksty są szablonami: liczby, daty i godziny zamieniamy na {0}, {1}…, więc „Za 11 dni, 29.10” i „Za 12 dni, 30.10”
 to jeden wpis."""
 import json, os, re, threading

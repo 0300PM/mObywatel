@@ -1990,7 +1990,6 @@
 "Skrzynka": "Prejeto",
 "Dotknij karty, aby ją otworzyć": "Dotaknite se kartice, da jo odprete",
 "Dotknij stosu, aby wrócić do dokumentów": "Dotaknite se sklada, da se vrnete na dokumente",
-"Odpowiada lokalny model Bielik. Ważne informacje sprawdź na karcie sprawy.": "Odgovarja lokalni model Bielik. Pomembne informacije preverite na kartici zadeve.",
 "Wynajem (3 doby)": "Najem (3 dni)",
 "automat · 5 miejsc · klimatyzacja": "avtomatik · 5 sedežev · klimatska naprava",
 "lub podobny": "ali podobno",
@@ -1998,5 +1997,7 @@
 "Sprawdź moją skrzynkę": "Preveri moj nabiralnik",
 "Płatność przyjęta. Rezerwacja potwierdzona, kluczyki czekają w wypożyczalni.": "Plačilo sprejeto. Rezervacija potrjena, ključi vas čakajo na okencu.",
 "Przetwarzam płatność…": "Obdelujem plačilo…",
-"Ta przeglądarka nie obsługuje rozpoznawania mowy. Napisz wiadomość tekstem.": "Ta brskalnik ne podpira prepoznavanja govora. Sporočilo napišite z besedilom."
+"Ta przeglądarka nie obsługuje rozpoznawania mowy. Napisz wiadomość tekstem.": "Ta brskalnik ne podpira prepoznavanja govora. Sporočilo napišite z besedilom.",
+"Model w Cloudflare nie odpowiedział. Sprawdź token i połączenie, potem spróbuj ponownie.": "Model v Cloudflare se ni odzval. Preveri žeton in povezavo ter poskusi znova.",
+"Odpowiada model z Cloudflare. Ważne informacje sprawdź na karcie sprawy.": "Odgovarja model Cloudflare. Pomembne informacije preveri na kartici zadeve."
 }

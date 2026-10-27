@@ -1990,7 +1990,6 @@
 "Skrzynka": "Postvak IN",
 "Dotknij karty, aby ją otworzyć": "Tik op de kaart om deze te openen",
 "Dotknij stosu, aby wrócić do dokumentów": "Tik op de stapel om terug te gaan naar documenten",
-"Odpowiada lokalny model Bielik. Ważne informacje sprawdź na karcie sprawy.": "Antwoord van het lokale Bielik-model. Controleer belangrijke informatie op de kaart van de zaak.",
 "Wynajem (3 doby)": "Huur (3 dagen)",
 "automat · 5 miejsc · klimatyzacja": "automaat · 5 zitplaatsen · airco",
 "lub podobny": "of vergelijkbaar",
@@ -1998,5 +1997,7 @@
 "Sprawdź moją skrzynkę": "Mijn postvak controleren",
 "Płatność przyjęta. Rezerwacja potwierdzona, kluczyki czekają w wypożyczalni.": "Betaling ontvangen. Reservering bevestigd, de sleutels liggen bij de balie.",
 "Przetwarzam płatność…": "Betaling wordt verwerkt…",
-"Ta przeglądarka nie obsługuje rozpoznawania mowy. Napisz wiadomość tekstem.": "Deze browser ondersteunt geen spraakherkenning. Typ uw bericht."
+"Ta przeglądarka nie obsługuje rozpoznawania mowy. Napisz wiadomość tekstem.": "Deze browser ondersteunt geen spraakherkenning. Typ uw bericht.",
+"Model w Cloudflare nie odpowiedział. Sprawdź token i połączenie, potem spróbuj ponownie.": "Het model op Cloudflare reageerde niet. Controleer het token en de verbinding en probeer opnieuw.",
+"Odpowiada model z Cloudflare. Ważne informacje sprawdź na karcie sprawy.": "Een Cloudflare-model antwoordt. Belangrijke informatie staat op de zaakkaart."
 }

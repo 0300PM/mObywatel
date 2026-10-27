@@ -109,6 +109,12 @@ export interface StanUslug {
   model: string
   modelGotowy: boolean
   bielik?: boolean
+  klucz?: boolean
+  konto?: boolean
+  kontoOk?: boolean
+  kluczRodzaj?: 'ok' | 'brak' | 'globalny' | 'krotki'
+  ostrzezenia?: string[]
+  config?: string
   glos: Record<string, string>
   stt: boolean
   tts: boolean

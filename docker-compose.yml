@@ -3,14 +3,11 @@ services:
     build: .
     env_file: .env
     environment:
-      # Ollama działa na Twoim komputerze, nie w kontenerze.
-      OLLAMA_URL: http://host.docker.internal:11434
-      PROVIDER: ${PROVIDER:-ollama}
-      MODEL: ${MODEL:-SpeakLeash/bielik-11b-v3.0-instruct:Q4_K_M}
-      BIELIK_TYLKO: ${BIELIK_TYLKO:-1}
-      MODEL_NUM_CTX: ${MODEL_NUM_CTX:-32768}
+      # W Dockerze serwer musi nasłuchiwać na wszystkich interfejsach (0.0.0.0),
+      # żeby port 8790 był osiągalny z hosta. W .env jest HOST=127.0.0.1, co jest
+      # bezpieczne przy uruchomieniu bez Dockera, ale env_file nadpisuje tu
+      # wartość z Dockerfile, więc jawnie przywracamy 0.0.0.0.
+      HOST: 0.0.0.0
     ports:
-      - "127.0.0.1:8790:8790"   # tylko lokalnie: serwer nie ma logowania
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
+      - "127.0.0.1:8790:8790"
     restart: unless-stopped

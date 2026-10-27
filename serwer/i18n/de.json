@@ -1990,7 +1990,6 @@
 "Skrzynka": "Posteingang",
 "Dotknij karty, aby ją otworzyć": "Karte antippen, um sie zu öffnen",
 "Dotknij stosu, aby wrócić do dokumentów": "Stapel antippen, um zu den Dokumenten zurückzukehren",
-"Odpowiada lokalny model Bielik. Ważne informacje sprawdź na karcie sprawy.": "Antwortet das lokale Modell Bielik. Wichtige Informationen stehen auf der Fallkarte.",
 "Wynajem (3 doby)": "Miete (3 Tage)",
 "automat · 5 miejsc · klimatyzacja": "Automatik · 5 Sitze · Klimaanlage",
 "lub podobny": "oder ähnlich",
@@ -1998,5 +1997,7 @@
 "Sprawdź moją skrzynkę": "Mein Postfach prüfen",
 "Płatność przyjęta. Rezerwacja potwierdzona, kluczyki czekają w wypożyczalni.": "Zahlung erhalten. Buchung bestätigt, die Schlüssel liegen an der Mietstation bereit.",
 "Przetwarzam płatność…": "Zahlung wird verarbeitet…",
-"Ta przeglądarka nie obsługuje rozpoznawania mowy. Napisz wiadomość tekstem.": "Dieser Browser unterstützt keine Spracherkennung. Bitte schreiben Sie Ihre Nachricht."
+"Ta przeglądarka nie obsługuje rozpoznawania mowy. Napisz wiadomość tekstem.": "Dieser Browser unterstützt keine Spracherkennung. Bitte schreiben Sie Ihre Nachricht.",
+"Model w Cloudflare nie odpowiedział. Sprawdź token i połączenie, potem spróbuj ponownie.": "Das Modell auf Cloudflare hat nicht geantwortet. Prüfe Token und Verbindung und versuche es erneut.",
+"Odpowiada model z Cloudflare. Ważne informacje sprawdź na karcie sprawy.": "Antwortet ein Modell von Cloudflare. Wichtige Informationen stehen auf der Fallkarte."
 }

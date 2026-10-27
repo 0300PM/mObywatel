@@ -171,7 +171,7 @@ onBeforeUnmount(() => {
         </button>
 
         <div
-          v-if="uslugi && (!uslugi.agent || uslugi.bielik === false)"
+          v-if="uslugi && uslugi.komunikat && (!uslugi.agent || uslugi.bielik === false)"
           class="mx-4 mb-2 shrink-0 rounded-xl bg-warn-wash px-3 py-2 text-[12.5px] leading-4 text-warn"
         >
           {{ uslugi.komunikat }}

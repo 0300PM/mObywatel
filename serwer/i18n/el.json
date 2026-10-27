@@ -1990,7 +1990,6 @@
 "Skrzynka": "Εισερχόμενα",
 "Dotknij karty, aby ją otworzyć": "Πατήστε την κάρτα για να την ανοίξετε",
 "Dotknij stosu, aby wrócić do dokumentów": "Πατήστε τη στοίβα για να επιστρέψετε στα έγγραφα",
-"Odpowiada lokalny model Bielik. Ważne informacje sprawdź na karcie sprawy.": "Απαντά το τοπικό μοντέλο Bielik. Ελέγξτε τις σημαντικές πληροφορίες στην κάρτα υπόθεσης.",
 "Wynajem (3 doby)": "Ενοικίαση (3 ημέρες)",
 "automat · 5 miejsc · klimatyzacja": "αυτόματο · 5 θέσεις · κλιματισμός",
 "lub podobny": "ή παρόμοιο",
@@ -1998,5 +1997,7 @@
 "Sprawdź moją skrzynkę": "Έλεγχος εισερχομένων",
 "Płatność przyjęta. Rezerwacja potwierdzona, kluczyki czekają w wypożyczalni.": "Η πληρωμή εγκρίθηκε. Η κράτηση επιβεβαιώθηκε, τα κλειδιά σας περιμένουν στο γκισέ.",
 "Przetwarzam płatność…": "Επεξεργασία πληρωμής…",
-"Ta przeglądarka nie obsługuje rozpoznawania mowy. Napisz wiadomość tekstem.": "Αυτό το πρόγραμμα περιήγησης δεν υποστηρίζει αναγνώριση ομιλίας. Γράψτε το μήνυμά σας."
+"Ta przeglądarka nie obsługuje rozpoznawania mowy. Napisz wiadomość tekstem.": "Αυτό το πρόγραμμα περιήγησης δεν υποστηρίζει αναγνώριση ομιλίας. Γράψτε το μήνυμά σας.",
+"Model w Cloudflare nie odpowiedział. Sprawdź token i połączenie, potem spróbuj ponownie.": "Το μοντέλο στο Cloudflare δεν απάντησε. Έλεγξε το token και τη σύνδεση και δοκίμασε ξανά.",
+"Odpowiada model z Cloudflare. Ważne informacje sprawdź na karcie sprawy.": "Απαντά μοντέλο του Cloudflare. Έλεγξε τις σημαντικές πληροφορίες στην κάρτα υπόθεσης."
 }

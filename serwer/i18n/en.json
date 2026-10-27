@@ -1990,7 +1990,6 @@
 "Skrzynka": "Inbox",
 "Dotknij karty, aby ją otworzyć": "Tap the card to open it",
 "Dotknij stosu, aby wrócić do dokumentów": "Tap the stack to go back to documents",
-"Odpowiada lokalny model Bielik. Ważne informacje sprawdź na karcie sprawy.": "Powered by the local Bielik model. Check important information on the case card.",
 "Wynajem (3 doby)": "Rental (3 days)",
 "automat · 5 miejsc · klimatyzacja": "automatic · 5 seats · air conditioning",
 "lub podobny": "or similar",
@@ -1998,5 +1997,7 @@
 "Sprawdź moją skrzynkę": "Check my inbox",
 "Płatność przyjęta. Rezerwacja potwierdzona, kluczyki czekają w wypożyczalni.": "Payment accepted. Booking confirmed, the keys are waiting at the rental desk.",
 "Przetwarzam płatność…": "Processing payment…",
-"Ta przeglądarka nie obsługuje rozpoznawania mowy. Napisz wiadomość tekstem.": "This browser does not support speech recognition. Please type your message."
+"Ta przeglądarka nie obsługuje rozpoznawania mowy. Napisz wiadomość tekstem.": "This browser does not support speech recognition. Please type your message.",
+"Model w Cloudflare nie odpowiedział. Sprawdź token i połączenie, potem spróbuj ponownie.": "The Cloudflare model did not respond. Check the token and the connection, then try again.",
+"Odpowiada model z Cloudflare. Ważne informacje sprawdź na karcie sprawy.": "A Cloudflare model answers. Check important information on the case card."
 }

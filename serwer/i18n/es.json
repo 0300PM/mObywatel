@@ -1990,7 +1990,6 @@
 "Skrzynka": "Bandeja de entrada",
 "Dotknij karty, aby ją otworzyć": "Toca la tarjeta para abrirla",
 "Dotknij stosu, aby wrócić do dokumentów": "Toca la pila para volver a los documentos",
-"Odpowiada lokalny model Bielik. Ważne informacje sprawdź na karcie sprawy.": "Responde el modelo local Bielik. Comprueba la información importante en la ficha del expediente.",
 "Wynajem (3 doby)": "Alquiler (3 días)",
 "automat · 5 miejsc · klimatyzacja": "automático · 5 plazas · aire acondicionado",
 "lub podobny": "o similar",
@@ -1998,5 +1997,7 @@
 "Sprawdź moją skrzynkę": "Revisar mi bandeja de entrada",
 "Płatność przyjęta. Rezerwacja potwierdzona, kluczyki czekają w wypożyczalni.": "Pago aceptado. Reserva confirmada, las llaves te esperan en la oficina de alquiler.",
 "Przetwarzam płatność…": "Procesando el pago…",
-"Ta przeglądarka nie obsługuje rozpoznawania mowy. Napisz wiadomość tekstem.": "Este navegador no admite el reconocimiento de voz. Escribe tu mensaje."
+"Ta przeglądarka nie obsługuje rozpoznawania mowy. Napisz wiadomość tekstem.": "Este navegador no admite el reconocimiento de voz. Escribe tu mensaje.",
+"Model w Cloudflare nie odpowiedział. Sprawdź token i połączenie, potem spróbuj ponownie.": "El modelo de Cloudflare no respondió. Comprueba el token y la conexión e inténtalo de nuevo.",
+"Odpowiada model z Cloudflare. Ważne informacje sprawdź na karcie sprawy.": "Responde un modelo de Cloudflare. Consulta la información importante en la tarjeta del caso."
 }

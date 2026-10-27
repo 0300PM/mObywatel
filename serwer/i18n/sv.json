@@ -1990,7 +1990,6 @@
 "Skrzynka": "Inkorgen",
 "Dotknij karty, aby ją otworzyć": "Tryck på kortet för att öppna det",
 "Dotknij stosu, aby wrócić do dokumentów": "Tryck på högen för att gå tillbaka till dokumenten",
-"Odpowiada lokalny model Bielik. Ważne informacje sprawdź na karcie sprawy.": "Svar från den lokala Bielik-modellen. Kontrollera viktig information på ärendekortet.",
 "Wynajem (3 doby)": "Hyra (3 dagar)",
 "automat · 5 miejsc · klimatyzacja": "automat · 5 platser · luftkonditionering",
 "lub podobny": "eller liknande",
@@ -1998,5 +1997,7 @@
 "Sprawdź moją skrzynkę": "Kontrollera min inkorg",
 "Płatność przyjęta. Rezerwacja potwierdzona, kluczyki czekają w wypożyczalni.": "Betalning mottagen. Bokningen är bekräftad, nycklarna väntar i uthyrningsdisken.",
 "Przetwarzam płatność…": "Behandlar betalning…",
-"Ta przeglądarka nie obsługuje rozpoznawania mowy. Napisz wiadomość tekstem.": "Den här webbläsaren stöder inte taligenkänning. Skriv ditt meddelande."
+"Ta przeglądarka nie obsługuje rozpoznawania mowy. Napisz wiadomość tekstem.": "Den här webbläsaren stöder inte taligenkänning. Skriv ditt meddelande.",
+"Model w Cloudflare nie odpowiedział. Sprawdź token i połączenie, potem spróbuj ponownie.": "Modellen på Cloudflare svarade inte. Kontrollera token och anslutning och försök igen.",
+"Odpowiada model z Cloudflare. Ważne informacje sprawdź na karcie sprawy.": "En Cloudflare-modell svarar. Viktig information finns på ärendekortet."
 }

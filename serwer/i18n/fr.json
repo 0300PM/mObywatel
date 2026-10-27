@@ -1990,7 +1990,6 @@
 "Skrzynka": "Boîte de réception",
 "Dotknij karty, aby ją otworzyć": "Appuyez sur la carte pour l'ouvrir",
 "Dotknij stosu, aby wrócić do dokumentów": "Appuyez sur la pile pour revenir aux documents",
-"Odpowiada lokalny model Bielik. Ważne informacje sprawdź na karcie sprawy.": "Réponse du modèle local Bielik. Vérifiez les informations importantes sur la fiche du dossier.",
 "Wynajem (3 doby)": "Location (3 jours)",
 "automat · 5 miejsc · klimatyzacja": "automatique · 5 places · climatisation",
 "lub podobny": "ou similaire",
@@ -1998,5 +1997,7 @@
 "Sprawdź moją skrzynkę": "Vérifier ma boîte de réception",
 "Płatność przyjęta. Rezerwacja potwierdzona, kluczyki czekają w wypożyczalni.": "Paiement accepté. Réservation confirmée, les clés vous attendent à l’agence.",
 "Przetwarzam płatność…": "Paiement en cours…",
-"Ta przeglądarka nie obsługuje rozpoznawania mowy. Napisz wiadomość tekstem.": "Ce navigateur ne prend pas en charge la reconnaissance vocale. Écrivez votre message."
+"Ta przeglądarka nie obsługuje rozpoznawania mowy. Napisz wiadomość tekstem.": "Ce navigateur ne prend pas en charge la reconnaissance vocale. Écrivez votre message.",
+"Model w Cloudflare nie odpowiedział. Sprawdź token i połączenie, potem spróbuj ponownie.": "Le modèle sur Cloudflare n'a pas répondu. Vérifiez le jeton et la connexion, puis réessayez.",
+"Odpowiada model z Cloudflare. Ważne informacje sprawdź na karcie sprawy.": "Un modèle Cloudflare répond. Consultez les informations importantes sur la fiche de la démarche."
 }

@@ -21,11 +21,13 @@ const wiadomosci = computed(() => aktywna.value?.wiadomosci ?? [])
 const pokazPusty = computed(() => wiadomosci.value.length === 0)
 
 const komunikatModelu = computed(() => {
-  if (bladModelu.value) return t('Lokalny model Bielik nie odpowiedział. Sprawdź, czy Ollama działa, i spróbuj ponownie.')
+  if (bladModelu.value) return t('Model w Cloudflare nie odpowiedział. Sprawdź token i połączenie, potem spróbuj ponownie.')
   if (uslugi.value && !uslugi.value.agent) return uslugi.value.komunikat
   if (uslugi.value && !modelGotowy.value) return uslugi.value.komunikat
   return ''
 })
+
+const ostrzezeniaModelu = computed(() => uslugi.value?.ostrzezenia ?? [])
 
 function przewinNaDol(plynnie = true): void {
   const el = lista.value
@@ -75,6 +77,9 @@ watch(
         <div v-if="komunikatModelu" class="mb-3 rounded-xl bg-warn-wash px-3 py-2.5 text-[13px] leading-[18px] text-warn">
           {{ komunikatModelu }}
         </div>
+        <ul v-else-if="ostrzezeniaModelu.length" class="mb-3 space-y-1 rounded-xl bg-warn-wash px-3 py-2.5 text-[13px] leading-[18px] text-warn">
+          <li v-for="tekst in ostrzezeniaModelu" :key="tekst">{{ tekst }}</li>
+        </ul>
         <div class="overflow-hidden rounded-2xl bg-surface">
           <button
             v-for="s in sugerowane"
@@ -93,7 +98,7 @@ watch(
       </div>
 
       <template v-else>
-        <p class="text-center text-[12px] leading-4 text-ink-3">{{ t('Odpowiada lokalny model Bielik. Ważne informacje sprawdź na karcie sprawy.') }}</p>
+        <p class="text-center text-[12px] leading-4 text-ink-3">{{ t('Odpowiada model z Cloudflare. Ważne informacje sprawdź na karcie sprawy.') }}</p>
         <ChatMessage
           v-for="m in wiadomosci"
           :key="m.id"
