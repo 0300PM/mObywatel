@@ -74,7 +74,10 @@ def _dodaj_zrodla(teksty):
         z = zrodla()
         nowe = set(teksty)
         if nowe - z:
-            json.dump(sorted(z | nowe), open(os.path.join(KAT, '_zrodla.json'), 'w', encoding='utf-8'), ensure_ascii=False, indent=0)
+            try:
+                json.dump(sorted(z | nowe), open(os.path.join(KAT, '_zrodla.json'), 'w', encoding='utf-8'), ensure_ascii=False, indent=0)
+            except OSError:
+                pass  # system plików tylko do odczytu (np. funkcje serverless na Vercelu)
 
 
 def przetlumacz(lang, teksty):

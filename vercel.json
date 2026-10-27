@@ -1,0 +1,14 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "buildCommand": "cd frontend && npm install && npm run build:only",
+  "outputDirectory": "frontend/dist",
+  "rewrites": [
+    { "source": "/komputer", "destination": "/komputer.html" },
+    { "source": "/(.*)", "destination": "/index.html" }
+  ],
+  "functions": {
+    "api/**/*.py": {
+      "excludeFiles": "{node_modules,frontend,.git,testy,docs}/**"
+    }
+  }
+}
