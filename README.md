@@ -1,9 +1,11 @@
-# mObywatel.ai: pełna wersja prototypu do uruchomienia u siebie
+# mObywatel.ai: prototyp z lokalnym modelem Bielik
 
-To prototyp aplikacji, w której zamiast menu i formularzy jest asystent AI: rozmawiasz z nim tekstem albo głosem,
-a on sprawdza dane w (fikcyjnych) rejestrach i załatwia sprawy, każdą czynność potwierdzasz na karcie.
-Wersja na stronie mobywatel.ai działa bez asystenta AI (scenariusze ze skryptu). Ta paczka zawiera pełną wersję:
-serwer w Pythonie z asystentem, rozpoznawaniem i syntezą mowy oraz front aplikacji.
+Prototyp aplikacji, w której zamiast menu i formularzy jest asystent AI: rozmawiasz z nim tekstem albo głosem,
+a on sprawdza dane w (fikcyjnych) rejestrach i załatwia sprawy. Każdą czynność potwierdzasz na karcie.
+
+Asystent działa **wyłącznie na modelu uruchomionym lokalnie** (polski Bielik przez Ollama). Projekt nie używa
+płatnych API: nie ma tu wysyłania rozmów do OpenAI, Anthropic ani ElevenLabs, nie ma syntezy mowy z chmury
+i nie ma automatycznego przełączania na płatnego dostawcę, gdy model lokalny zawiedzie.
 
 **Ważne:** to prototyp z fikcyjnymi danymi (osoby, numery PESEL, dokumenty, pojazdy i płatności są zmyślone).
 To nie jest usługa administracji publicznej ani aplikacja mObywatel, nie łączy się z żadnym rejestrem państwowym
@@ -12,124 +14,186 @@ i nie wolno w nim wpisywać prawdziwych danych osobowych. Teksty z kart usług g
 
 ## Co jest w paczce
 
-- `serwer/`: serwer HTTP w Pythonie (sama biblioteka standardowa, bez `pip install`), asystent, narzędzia, fikcyjne dane.
+- `frontend/`: aplikacja w **Vue 3 + TypeScript + Tailwind CSS** (Vite), dwa wejścia: telefon (`index.html`)
+  i strona „komputera” (`komputer.html`). Zbudowane pliki leżą w `frontend/dist`.
+- `serwer/`: serwer HTTP w Pythonie (tylko biblioteka standardowa, bez `pip install`), pętla agenta, narzędzia,
+  fikcyjne dane, znak mObywatela.
+  - `serwer/bielik.py`: jedno miejsce konfiguracji modelu (dostawca, nazwa, okno kontekstu, próbkowanie, blokada innych modeli),
   - `serwer/i18n/`: słowniki interfejsu (15 języków poza polskim),
-  - `serwer/glosariusz/`: słowniczek dla tłumaczenia rozmowy z asystentem,
   - `serwer/wiedza/`: baza wiedzy z kart usług gov.pl (wyszukiwanie lokalne, bez sieci).
-- `mockup/`: front aplikacji (HTML, CSS, JavaScript, grafiki).
+- `docs/SPRAWDZENIE.md`: lista miejsc w kodzie do sprawdzenia i kryteria testowania.
 - `Dockerfile`, `docker-compose.yml`, `.env.example`.
 
 ## Wymagania
 
-- Python 3.9 lub nowszy (Linux, macOS albo Windows), bez dodatkowych bibliotek, albo Docker.
-- Przeglądarka. Głos wymaga dostępu do mikrofonu, a przeglądarki dają go tylko pod adresem `localhost`/`127.0.0.1` albo przez HTTPS.
-- Klucze API (patrz niżej). Wywołania modeli są płatne według cennika dostawcy i obciążają Twoje konto.
+- Python 3.9 lub nowszy (Linux, macOS albo Windows), bez dodatkowych bibliotek.
+- Node.js 20 lub nowszy, tylko jeśli chcesz przebudować frontend (`npm run build`). Zbudowana wersja jest w paczce.
+- [Ollama](https://ollama.com) z modelem Bielik. Rozmowa działa bez internetu, ale pobranie modelu wymaga sieci.
+- Przeglądarka. Głos korzysta z wbudowanych funkcji przeglądarki (mikrofon i mowa), więc działa tylko pod adresem
+  `localhost`/`127.0.0.1` albo przez HTTPS.
 
-## Klucze API: co jest obowiązkowe, a co opcjonalne
+### Sprzęt
 
-| Zmienna | Czy potrzebna | Do czego |
-|---|---|---|
-| `OPENAI_API_KEY` | zalecana (domyślny dostawca) | asystent (`PROVIDER=openai`), rozpoznawanie i synteza mowy, tłumaczenie rozmowy na inne języki |
-| `ELEVENLABS_API_KEY` | opcjonalna | lepszy polski głos i rozpoznawanie mowy; bez klucza albo po błędzie serwer używa OpenAI |
-| `ANTHROPIC_API_KEY` | opcjonalna | asystent na modelu Claude (`PROVIDER=anthropic`) |
-| `MODEL_API_KEY` | opcjonalna | klucz do API zgodnego z OpenAI (`PROVIDER=zgodny`), jeśli serwer modelu go wymaga |
+| Model | Pobranie | RAM (szacunkowo) | Uwagi |
+|---|---|---|---|
+| `SpeakLeash/bielik-11b-v3.0-instruct:Q4_K_M` | 6,7 GB | 12 GB | domyślny, dobry kompromis |
+| `SpeakLeash/bielik-11b-v3.0-instruct:Q8_0` | 12 GB | 20 GB | lepsza jakość |
+| `SpeakLeash/bielik-minitron-7B-v3.0-instruct:Q4_K_M` | 4,4 GB | 8 GB | szybszy, słabszy w narzędziach |
+| `SpeakLeash/bielik-4.5b-v3.0-instruct:Q8_0` | 4,8 GB | 6 GB | do testów interfejsu |
 
-Co działa bez kluczy:
-
-- **Bez żadnego klucza** aplikacja się uruchomi w trybie skryptowym, tak jak na stronie: gotowe scenariusze, bez asystenta i bez głosu.
-- **Tylko `OPENAI_API_KEY`**: wszystko (asystent, głos, tłumaczenie rozmowy).
-- **Tylko `ANTHROPIC_API_KEY` z `PROVIDER=anthropic`**: asystent działa po polsku, ale bez głosu i bez tłumaczenia rozmowy na inne języki (interfejs dalej jest tłumaczony ze słowników).
-- **Tylko model zgodny z OpenAI (`PROVIDER=zgodny`)**: jak wyżej, asystent tak, głos i tłumaczenie rozmowy nie.
-
-Na macOS, gdy zmiennej nie ma, serwer próbuje jeszcze odczytać klucz z pęku kluczy (pozycje `openai_api_key`,
-`elevenlabs_api_key`, `anthropic_api_key`). Na Linuksie i w Dockerze liczą się tylko zmienne środowiskowe.
+Karta graficzna nie jest wymagana, ale na samym procesorze 11B odpowiada kilka razy wolniej.
+Przy 16 GB RAM zamknij inne aplikacje: model trzyma się w pamięci przez `MODEL_KEEP_ALIVE`.
 
 ## Uruchomienie lokalne
 
 ```bash
-cd mobywatel-ai
-export OPENAI_API_KEY="..."          # Twój klucz; pozostałe zmienne opcjonalnie
-python3 serwer/server.py             # albo: python3 serwer/server.py 8080
+# 1. model (raz)
+ollama pull SpeakLeash/bielik-11b-v3.0-instruct:Q4_K_M
+ollama serve                       # jeśli nie działa już jako usługa w tle
+
+# 2. konfiguracja
+cp .env.example .env               # domyślnie: PROVIDER=ollama, MODEL=Bielik 11B v3.0 Q4_K_M
+
+# 3. serwer — .env z katalogu głównego wczytuje się sam
+python3 serwer/server.py
 ```
 
-Otwórz http://127.0.0.1:8790/aplikacja (adres `/` też pokazuje aplikację, `/komputer` to ekran „komputera” do przekazywania danych znakiem).
+Otwórz http://127.0.0.1:8790/aplikacja (adres `/` też pokazuje aplikację, `/komputer` to strona wypożyczalni,
+na której telefon przekazuje dane znakiem). Wersje językowe: `/de/aplikacja`, `/fr/aplikacja` itd.
 
-Możesz też trzymać ustawienia w pliku: `cp .env.example .env`, uzupełnij i uruchom `set -a; . ./.env; set +a; python3 serwer/server.py`.
+Sprawdzenie, czy model odpowiada:
+
+```bash
+curl -s http://127.0.0.1:8790/api/health | python3 -m json.tool
+```
+
+`agent: true` i `modelGotowy: true` oznaczają gotowy model. Gdy modelu nie ma, `komunikat` mówi, co zrobić.
+
+### Frontend: praca nad kodem
+
+```bash
+cd frontend
+npm install
+npm run dev          # http://127.0.0.1:5173, /api proxowane do serwera na porcie 8790
+npm run build        # wynik w frontend/dist, serwowany przez python3 serwer/server.py
+npm run typecheck
+```
 
 ## Uruchomienie w Dockerze
 
 ```bash
-cd mobywatel-ai
-cp .env.example .env                 # uzupełnij klucze
+cp .env.example .env
 docker compose up --build
 ```
 
-Aplikacja będzie pod http://127.0.0.1:8790/aplikacja. Bez Compose:
-`docker build -t mobywatel-ai . && docker run --rm --env-file .env -p 127.0.0.1:8790:8790 mobywatel-ai`.
+W Dockerze serwer modelu działa na Twoim komputerze, więc w `.env` ustaw `OLLAMA_URL=http://host.docker.internal:11434`
+(`docker-compose.yml` dodaje wpis `host.docker.internal` także na Linuksie). Bez Compose:
+`docker build -t mobywatel-ai . && docker run --rm --env-file .env --add-host=host.docker.internal:host-gateway -p 127.0.0.1:8790:8790 mobywatel-ai`.
 
 ## Ustawienia (zmienne środowiskowe)
 
 | Zmienna | Domyślnie | Opis |
 |---|---|---|
-| `PROVIDER` | `openai` | dostawca modelu rozmowy: `openai`, `anthropic` albo `zgodny` |
-| `OPENAI_MODEL` | `gpt-6-luna` | model asystenta przy `PROVIDER=openai` (API Responses) |
-| `OPENAI_TIER`, `OPENAI_EFFORT` | `fast`, `low` | poziom usługi i wysiłek rozumowania; gdy konto ich nie obsługuje, serwer ponawia zapytanie bez nich |
-| `MODEL` | | model asystenta przy `PROVIDER=zgodny` (wymagany) albo pierwszy model do wypróbowania przy `PROVIDER=anthropic` |
-| `OPENAI_BASE_URL` | `https://api.openai.com/v1` | adres API zgodnego z OpenAI przy `PROVIDER=zgodny` |
-| `MODEL_MAX_TOKENS`, `MODEL_TIMEOUT` | `1500`, `120` | limit długości odpowiedzi i czas oczekiwania (s) przy `PROVIDER=zgodny` |
-| `TLUMACZ_MODEL` | `gpt-6-luna` | model OpenAI do tłumaczenia rozmowy na język interfejsu |
-| `STT_MODEL`, `TTS_MODEL`, `TTS_VOICE` | `gpt-4o-mini-transcribe`, `gpt-4o-mini-tts`, `coral` | mowa przez OpenAI |
-| `EL_VOICE`, `EL_TTS_MODEL`, `EL_STT_MODEL` | głos z biblioteki ElevenLabs, `eleven_flash_v2_5`, `scribe_v2` | mowa przez ElevenLabs; wybrany głos może wymagać płatnego planu, wtedy ustaw własny `EL_VOICE` |
+| `BIELIK_TYLKO` | `1` | `1` = inny model niż Bielik jest odrzucany (komunikat i błąd 503); `0` = dopuszczony z ostrzeżeniem |
+| `PROVIDER` | `ollama` | `ollama` (natywne API Ollamy) albo `zgodny` (dowolne API zgodne z OpenAI) |
+| `OLLAMA_URL` | `http://127.0.0.1:11434` | adres Ollamy |
+| `MODEL` | `SpeakLeash/bielik-11b-v3.0-instruct:Q4_K_M` | model asystenta, pełna nazwa z tagiem |
+| `MODEL_NUM_CTX` | `32768` | okno kontekstu; instrukcja + 66 narzędzi to ok. 14,6 tys. tokenów, więc mniejsze wartości uciskają historię |
+| `MODEL_MAX_TOKENS` | `1200` | limit długości odpowiedzi |
+| `MODEL_TEMPERATURE` | `0.1` | temperatura; niska stabilizuje wywoływanie narzędzi |
+| `MODEL_TOP_P`, `MODEL_TOP_K`, `MODEL_MIN_P` | `0.95`, `40`, `0.05` | obcinanie ogona rozkładu przy próbkowaniu |
+| `MODEL_REPEAT_PENALTY`, `MODEL_REPEAT_LAST_N` | `1.1`, `256` | kara powtórzeń: mniej zapętleń i obcych słów |
+| `MODEL_SEED` | `-1` | `-1` = losowo; stała liczba = powtarzalne odpowiedzi w testach |
+| `MODEL_TIMEOUT` | `180` | czas oczekiwania na odpowiedź (s) |
+| `MODEL_KEEP_ALIVE` | `30m` | jak długo model zostaje w pamięci |
+| `MODEL_WARMUP` | `1` | `1` = wczytaj model przy starcie serwera |
+| `OPENAI_BASE_URL` | `OLLAMA_URL` + `/v1` | adres API przy `PROVIDER=zgodny` |
+| `MODEL_API_KEY` | puste | klucz tylko wtedy, gdy lokalny serwer go wymaga |
 | `HOST`, `PORT` | `127.0.0.1`, `8790` | adres i port serwera (w Dockerze `HOST=0.0.0.0`) |
 | `AGENT_LOG` | `serwer/agent.log` | plik dziennika |
+| `MOCKUP` | `frontend/dist` | katalog z plikami statycznymi |
 
-Nazwy modeli mogą się zmieniać u dostawców: jeśli domyślny model nie jest dostępny na Twoim koncie, ustaw własny.
+Nazwy modeli i tagi zmieniają się u wydawcy: jeśli domyślny model nie jest dostępny, ustaw własny `MODEL`.
+Lista pobranych modeli: `ollama list`.
 
-## Polskie modele (Bielik, PLLuM i inne)
-
-Asystenta można podpiąć do dowolnego API zgodnego z OpenAI Chat Completions (`/v1/chat/completions`), na przykład
-do polskiego modelu uruchomionego lokalnie (vLLM, Ollama) albo u dostawcy chmurowego:
+Wszystkie ustawienia modelu czyta `serwer/bielik.py` — jedno miejsce na dostawcę, nazwę modelu, okno kontekstu,
+próbkowanie i warianty. Podgląd i pobranie:
 
 ```bash
-export PROVIDER=zgodny
-export OPENAI_BASE_URL="http://127.0.0.1:8000/v1"   # adres serwera modelu (wzór; vLLM domyślnie: port 8000, Ollama: http://127.0.0.1:11434/v1)
-export MODEL="<nazwa-modelu-na-tym-serwerze>"
-export MODEL_API_KEY="..."                         # tylko jeśli serwer wymaga klucza
-python3 serwer/server.py
+python3 serwer/bielik.py             # co jest ustawione, czy model jest pobrany
+python3 serwer/bielik.py --pobierz   # ollama pull dla MODEL
 ```
 
-W Dockerze serwer modelu działający na Twoim komputerze jest pod adresem `http://host.docker.internal:<port>/v1`.
+### Tylko Bielik
 
-Zastrzeżenia, zanim zaczniesz:
+Projekt obsługuje wyłącznie rodzinę Bielik (SpeakLeash): domyślnie `BIELIK_TYLKO=1`, więc inna nazwa w `MODEL`
+kończy się czytelnym komunikatem w `/api/health` (`bielik: false`), ostrzeżeniem w interfejsie i błędem 503
+na `/api/agent` — zamiast po cichu odpowiadać innym modelem. Dopuszczalne są wszystkie warianty Bielika
+(11B Q4_K_M, Q8_0, minitron 7B, 4.5B); różnią się jakością wywoływania narzędzi.
+`BIELIK_TYLKO=0` zdejmuje blokadę, zostawiając ostrzeżenie — przydaje się do porównań.
 
-- Asystent działa przez **wywoływanie narzędzi** (tool calling): ma do dyspozycji kilkadziesiąt narzędzi i sam decyduje, które wywołać.
-  Model i serwer muszą to obsługiwać (w vLLM trzeba włączyć automatyczny wybór narzędzi i parser wywołań właściwy dla modelu, zgodnie z dokumentacją).
-  Model bez tej obsługi będzie tylko rozmawiał, bez sprawdzania danych i bez załatwiania spraw.
-- Opisy narzędzi i instrukcje zajmują sporo kontekstu (kilkanaście tysięcy tokenów), więc model potrzebuje odpowiednio dużego okna kontekstu.
-- Instrukcje i narzędzia były dopracowywane pod modele OpenAI i Anthropic. Na innych modelach jakość rozmów,
-  trafność wyboru narzędzi i polszczyzna mogą być wyraźnie inne, w obie strony.
-- Przy `PROVIDER=zgodny` przez wskazane API idzie tylko rozmowa z asystentem. Głos i tłumaczenie rozmowy dalej korzystają z OpenAI,
-  jeśli podasz `OPENAI_API_KEY`, a bez tego klucza są wyłączone.
+## Jak działa asystent
+
+1. `frontend/src/lib/rozmowa.ts` wysyła historię rozmowy do `/api/agent`.
+2. `serwer/agent.py` dokłada instrukcję systemową, kilkadziesiąt narzędzi i woła model
+   (Ollama: `POST /api/chat` z `tools`, `num_ctx`, `keep_alive`).
+3. Model wybiera narzędzie, serwer czyta dane z fikcyjnych rejestrów (`serwer/dane.py`) albo przygotowuje
+   kartę potwierdzenia (`serwer/akcje.py`). Czynność wykonuje się dopiero po potwierdzeniu na karcie.
+4. Karta trafia do przeglądarki jako zdarzenie (`card`, `confirm`, `chips`, `qrflow`), a frontend rysuje ją
+   komponentem `DataCard.vue`.
+
+Narzędzia wymagają modelu z obsługą wywoływania funkcji. Bielik 11B v3.0 ją ma; mniejsze warianty
+(minitron, 4.5B) mogą wybierać narzędzia niestarannie. Opisy narzędzi zajmują kilkanaście tysięcy tokenów,
+dlatego `MODEL_NUM_CTX` musi być odpowiednio duży: przy 16384 całe okno zjada instrukcja z narzędziami
+i w historii zostaje jedno zdanie. Serwer liczy dostępne miejsce i przycina najstarsze tury (`przytnij()`
+w `serwer/agent.py`), zamiast pozwolić Ollamie po cichu uciąć początek promptu. Całą konfiguracją modelu rządzi `serwer/bielik.py`
+(parametry Ollamy: `temperature`, `top_p`, `top_k`, `min_p`, `repeat_penalty`, `num_ctx`, `num_predict`, `seed`).
+
+## Bez kluczy API i bez płatnych usług: co się zmieniło
+
+- **Modele**: usunięto OpenAI, Anthropic i Claude. Zostały dwa dostawcy lokalni: `ollama` (domyślnie) i `zgodny`
+  (vLLM, llama.cpp, LM Studio — dowolne API w formacie OpenAI). Jedyne modele to warianty Bielika:
+  `BIELIK_TYLKO=1` odrzuca każdy inny (503), a konfiguracja próbkowania jest dobrana pod Bielika 11B v3.0.
+- **Głos**: nie ma `/api/stt` ani `/api/tts`, nie ma ElevenLabs. Rozpoznawanie mowy to Web Speech API
+  (`SpeechRecognition`), a czytanie odpowiedzi to `speechSynthesis` — oba w przeglądarce, bez kluczy.
+  Gdy przeglądarka nie ma rozpoznawania mowy, mikrofon jest nieaktywny, a rozmowa działa tekstem.
+- **Tłumaczenie rozmowy**: nie ma tłumaczenia maszynowego. Asystent rozmawia po polsku, interfejs korzysta
+  ze słowników w `serwer/i18n/`. Teksty, których w słowniku nie ma, zostają po polsku i trafiają do rejestru
+  `serwer/i18n/_zrodla.json` (tworzony przy pierwszym braku). Etykiety kart, podpisy pól i nazwy dokumentów
+  też przechodzą przez `t()`, więc `/de/aplikacja` pokazuje niemiecki interfejs; polskie zostają tylko dane
+  z rejestrów i zdania wygenerowane przez model.
+- **Tryb skryptowy**: usunięty. Wcześniej brak klucza oznaczał gotowe scenariusze; teraz aplikacja ma jedną
+  ścieżkę (agent na lokalnym modelu), a przy niedostępnym modelu pokazuje komunikat i nie udaje odpowiedzi.
+- **Błędy**: brak sieci, brak modelu, przekroczony czas, zły model — każde z nich kończy się komunikatem
+  po polsku i kodem 503. Serwer nigdy nie przełącza się na inną (płatną) usługę.
+- **Prywatność**: rozmowa nie opuszcza Twojego komputera. Diagnostyka nagrań (`/api/glos`) została usunięta.
+
+## Co sprawdzić w kodzie i jak testować
+
+Pełna lista miejsc do przeglądu i kryteria testów: [`docs/SPRAWDZENIE.md`](docs/SPRAWDZENIE.md).
 
 ## Bezpieczeństwo i prywatność
 
-- Serwer nie ma logowania ani limitów. Każdy, kto dostanie się do jego adresu, korzysta z Twoich kluczy API.
-  Domyślnie słucha tylko na `127.0.0.1`, a `docker-compose.yml` wystawia port tylko lokalnie. Nie wystawiaj go do internetu bez własnej ochrony.
-- Serwer zapisuje dziennik (`serwer/agent.log`): wiadomości wpisane do asystenta, rozpoznany tekst nagrań, użyte narzędzia i czasy odpowiedzi.
-  Nagrania głosu nie są zapisywane na dysku, ale trafiają do dostawcy rozpoznawania mowy.
-- Treść rozmów trafia do wybranego dostawcy modelu na jego zasadach.
+- Serwer nie ma logowania ani limitów. Każdy, kto dostanie się do jego adresu, korzysta z Twojego modelu.
+  Domyślnie słucha tylko na `127.0.0.1`, a `docker-compose.yml` wystawia port tylko lokalnie.
+  Nie wystawiaj go do internetu bez własnej ochrony.
+- Serwer zapisuje dziennik (`serwer/agent.log`): wiadomości wpisane do asystenta, użyte narzędzia i czasy odpowiedzi.
+- Rozpoznawanie mowy w przeglądarce może korzystać z usługi dostawcy przeglądarki (tak działa Chrome).
+  Jeśli to nieakceptowalne, korzystaj z tekstu albo z przeglądarki z lokalnym rozpoznawaniem mowy.
 
 ## Licencja
 
-Kod prototypu (pliki `.py`, `.js`, `.html`, `.css`, słowniki interfejsu i pliki konfiguracyjne) jest udostępniony na licencji MIT.
-Pełny tekst jest w pliku `LICENSE`. Możesz go używać, zmieniać i rozpowszechniać, także komercyjnie,
-pod warunkiem zachowania informacji o autorze i treści licencji.
+Kod prototypu (pliki `.py`, `.ts`, `.vue`, `.html`, `.css`, słowniki interfejsu i pliki konfiguracyjne) jest
+udostępniony na licencji MIT. Pełny tekst jest w pliku `LICENSE`. Możesz go używać, zmieniać i rozpowszechniać,
+także komercyjnie, pod warunkiem zachowania informacji o autorze i treści licencji.
 
 Licencja MIT nie obejmuje:
 - godła Rzeczypospolitej Polskiej, nazwy, logo i oznaczeń mObywatela ani wyglądu dokumentów
-  (m.in. `mockup/assets/icon-mobywatel.svg`, `logo-mobywatel*`, `card-*`, `strip-*`, `mdowod-ekran.png`).
+  (m.in. `frontend/public/assets/icon-mobywatel.svg`, `logo-mobywatel*`, `card-*`, `strip-*`, `mdowod-ekran.png`).
   Są w prototypie wyłącznie w celach pokazowych, a ich użycie podlega odrębnym przepisom i prawom ich właścicieli;
-- zdjęć osób z pokazu (`mockup/assets/foto-*.jpg`);
-- opisów usług w `serwer/wiedza/`, które pochodzą z serwisu gov.pl. Przy ich ponownym wykorzystaniu sprawdź warunki podane na gov.pl.
+- zdjęć osób z pokazu (`frontend/public/assets/foto-*.jpg`);
+- opisów usług w `serwer/wiedza/`, które pochodzą z serwisu gov.pl. Przy ich ponownym wykorzystaniu sprawdź
+  warunki podane na gov.pl;
+- wag modelu Bielik, które pobierasz z Ollamy na warunkach wydawcy (SpeakLeash, licencja Apache 2.0).
 
 Osoby i dane w prototypie są fikcyjne. Projekt nie jest usługą administracji publicznej ani oficjalną aplikacją mObywatel.

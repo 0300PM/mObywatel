@@ -2,8 +2,15 @@ services:
   mobywatel:
     build: .
     env_file: .env
+    environment:
+      # Ollama działa na Twoim komputerze, nie w kontenerze.
+      OLLAMA_URL: http://host.docker.internal:11434
+      PROVIDER: ${PROVIDER:-ollama}
+      MODEL: ${MODEL:-SpeakLeash/bielik-11b-v3.0-instruct:Q4_K_M}
+      BIELIK_TYLKO: ${BIELIK_TYLKO:-1}
+      MODEL_NUM_CTX: ${MODEL_NUM_CTX:-32768}
     ports:
-      - "127.0.0.1:8790:8790"   # tylko lokalnie: serwer korzysta z Twoich kluczy API i nie ma logowania
+      - "127.0.0.1:8790:8790"   # tylko lokalnie: serwer nie ma logowania
     extra_hosts:
-      - "host.docker.internal:host-gateway"   # dostęp do serwera modelu na Twoim komputerze (Linux)
+      - "host.docker.internal:host-gateway"
     restart: unless-stopped

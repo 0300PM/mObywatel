@@ -1986,5 +1986,17 @@
 "−{0} gr/l": "−{0} gr/l",
 "✓ Tożsamość potwierdzona przez mObywatel": "✓ Totožnost potvrzena aplikací mObywatel",
 "📷 zdjęcie dowodu rejestracyjnego": "📷 fotka malého technického průkazu",
-"📷 {0} zdjęcia": "📷 {0} fotky"
+"📷 {0} zdjęcia": "📷 {0} fotky",
+"Skrzynka": "Doručená pošta",
+"Dotknij karty, aby ją otworzyć": "Klepnutím na kartu ji otevřete",
+"Dotknij stosu, aby wrócić do dokumentów": "Klepnutím na balíček se vrátíte k dokumentům",
+"Odpowiada lokalny model Bielik. Ważne informacje sprawdź na karcie sprawy.": "Odpovídá místní model Bielik. Důležité informace ověřte na kartě případu.",
+"Wynajem (3 doby)": "Pronájem (3 dny)",
+"automat · 5 miejsc · klimatyzacja": "automat · 5 míst · klimatizace",
+"lub podobny": "nebo podobný",
+"Ta przeglądarka nie obsługuje rozpoznawania mowy": "Tento prohlížeč nepodporuje rozpoznávání řeči",
+"Sprawdź moją skrzynkę": "Zkontrolovat mou poštu",
+"Płatność przyjęta. Rezerwacja potwierdzona, kluczyki czekają w wypożyczalni.": "Platba přijata. Rezervace potvrzena, klíče čekají na pobočce.",
+"Przetwarzam płatność…": "Zpracovávám platbu…",
+"Ta przeglądarka nie obsługuje rozpoznawania mowy. Napisz wiadomość tekstem.": "Tento prohlížeč nepodporuje rozpoznávání řeči. Napište zprávu textem."
 }

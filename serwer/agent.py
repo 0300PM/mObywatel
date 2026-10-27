@@ -1,12 +1,11 @@
 # -*- coding: utf-8 -*-
-"""Pętla agenta: Claude (Haiku) + narzędzia. Bezstanowa: klient przechowuje historię rozmowy i stan świata."""
+"""Pętla agenta: lokalny model Bielik (Ollama) albo dowolne API zgodne z OpenAI + narzędzia.
+Bezstanowa: klient przechowuje historię rozmowy i stan świata."""
 import json, os, re, time, copy, urllib.request, urllib.error, html
-import dane, akcje, persony, tlumacz, threading
+import dane, akcje, persony, threading, bielik
 _JEZ = threading.local()
 from narzedzia import WSZYSTKIE, NAZWY_ODCZYTOW, NAZWY_AKCJI, NAZWY_UI, NAZWY_KLIENT
 
-MODELE = [m for m in [os.environ.get('MODEL'), 'claude-haiku-5-5', 'claude-haiku-4-5'] if m]  # dla PROVIDER=anthropic
-_model_ok = None
 DNI = ['poniedziałek', 'wtorek', 'środa', 'czwartek', 'piątek', 'sobota', 'niedziela']
 
 SYSTEM = """Jesteś asystentem w aplikacji mObywatel. Rozmawiasz z {zalogowana}: {kto}, PESEL {pesel}, {okolica} (tożsamość potwierdzona mDowodem). Dziś jest {dzis} ({dzien}).{meski}
@@ -56,14 +55,6 @@ def system_prompt():
         meski='' if k else '\nUWAGA: rozmawiasz z mężczyzną. Gdzie poniższe zasady i opisy narzędzi mówią „użytkowniczka”, „ona”, „jej”, chodzi o niego. Zawsze używaj form męskich.')
     return s
 
-def klucz(nazwa, env):
-    if os.environ.get(env): return os.environ[env]
-    try:
-        import subprocess
-        return subprocess.check_output(['security', 'find-generic-password', '-s', nazwa, '-w'], stderr=subprocess.DEVNULL).decode().strip() or None
-    except Exception:
-        return None
-
 def bez_myslnikow(t):
     return re.sub(r'\s*—\s*', ', ', re.sub(r'\s+–\s+', ', ', t)).replace(', ,', ',').replace(', .', '.')
 
@@ -75,115 +66,35 @@ def md(t):
 
 class BladAPI(Exception): pass
 
-def claude(messages, key, log):
-    global _model_ok
-    tools = copy.deepcopy(WSZYSTKIE)
-    tools[-1]['cache_control'] = {'type': 'ephemeral'}
-    modele = [_model_ok] if _model_ok else MODELE
-    last = None
-    for model in modele:
-        body = dict(model=model, max_tokens=1200, system=[{'type': 'text', 'text': system_prompt(), 'cache_control': {'type': 'ephemeral'}}],
-                    tools=tools, tool_choice={'type': 'auto', 'disable_parallel_tool_use': True}, messages=messages)
-        for proba in range(4):
-            req = urllib.request.Request('https://api.anthropic.com/v1/messages', data=json.dumps(body).encode(),
-                headers={'x-api-key': key, 'anthropic-version': '2023-06-01', 'content-type': 'application/json'})
-            t0 = time.time()
-            try:
-                with urllib.request.urlopen(req, timeout=60) as r:
-                    out = json.loads(r.read())
-                _model_ok = model
-                log(dict(t='llm', model=model, ms=int((time.time() - t0) * 1000), usage=out.get('usage'), stop=out.get('stop_reason')))
-                return out
-            except urllib.error.HTTPError as e:
-                txt = e.read().decode('utf-8', 'replace')
-                last = '%s %s' % (e.code, txt[:300])
-                if e.code == 404 or (e.code == 400 and 'model' in txt.lower() and len(modele) > 1):
-                    break  # spróbuj kolejnego modelu
-                if e.code in (429, 500, 502, 503, 529):
-                    time.sleep(1.5 * (proba + 1)); continue
-                raise BladAPI(last)
-            except Exception as e:
-                last = str(e); time.sleep(1.0 * (proba + 1))
-    raise BladAPI(last or 'brak odpowiedzi')
-
-PROVIDER = os.environ.get('PROVIDER', 'openai')
-OPENAI_MODEL = os.environ.get('OPENAI_MODEL', 'gpt-6-luna')
-OPENAI_TIER = os.environ.get('OPENAI_TIER', 'fast')
-OPENAI_EFFORT = os.environ.get('OPENAI_EFFORT', 'low')
-
-def do_responses(messages):
-    """Historia w formacie bloków (text/tool_use/tool_result) -> elementy wejścia Responses API."""
-    items = []
-    for m in messages:
-        c = m['content']
-        if isinstance(c, str):
-            items.append({'role': m['role'], 'content': c}); continue
-        for b in c:
-            t = b.get('type')
-            if t == 'text' and b.get('text', '').strip():
-                items.append({'role': m['role'], 'content': b['text']})
-            elif t == 'tool_use':
-                items.append({'type': 'function_call', 'call_id': b['id'], 'name': b['name'], 'arguments': json.dumps(b.get('input') or {}, ensure_ascii=False)})
-            elif t == 'tool_result':
-                out = b.get('content')
-                items.append({'type': 'function_call_output', 'call_id': b['tool_use_id'], 'output': out if isinstance(out, str) else json.dumps(out, ensure_ascii=False)})
-    return items
-
-def openai(messages, key, log):
-    tools = [{'type': 'function', 'name': t['name'], 'description': t['description'], 'parameters': t['input_schema'], 'strict': False} for t in WSZYSTKIE]
-    body = dict(model=OPENAI_MODEL, instructions=system_prompt(), input=do_responses(messages), tools=tools, parallel_tool_calls=False,
-                max_output_tokens=1500, store=False, prompt_cache_key='mobywatel-agent-' + persony.P()['id'])
-    if OPENAI_TIER: body['service_tier'] = OPENAI_TIER
-    if OPENAI_EFFORT: body['reasoning'] = {'effort': OPENAI_EFFORT}
-    last = None
-    for proba in range(4):
-        req = urllib.request.Request('https://api.openai.com/v1/responses', data=json.dumps(body).encode(),
-            headers={'Authorization': 'Bearer ' + key, 'Content-Type': 'application/json'})
-        t0 = time.time()
-        try:
-            with urllib.request.urlopen(req, timeout=60) as r:
-                out = json.loads(r.read())
-        except urllib.error.HTTPError as e:
-            txt = e.read().decode('utf-8', 'replace'); last = '%s %s' % (e.code, txt[:400])
-            if e.code in (429, 500, 502, 503) and proba < 3:
-                time.sleep(1.5 * (proba + 1)); continue
-            if e.code == 400 and 'service_tier' in txt and body.get('service_tier'):
-                body.pop('service_tier'); continue
-            if e.code == 400 and 'reasoning' in txt and body.get('reasoning'):
-                body.pop('reasoning'); continue
-            raise BladAPI(last)
-        except Exception as e:
-            last = str(e); time.sleep(1.0 * (proba + 1)); continue
-        content = []
-        for it in out.get('output', []):
-            if it.get('type') == 'message':
-                txt = ''.join(p.get('text', '') for p in it.get('content', []) if p.get('type') in ('output_text', 'text'))
-                if txt.strip(): content.append({'type': 'text', 'text': txt})
-            elif it.get('type') == 'function_call':
-                try: args = json.loads(it.get('arguments') or '{}')
-                except Exception: args = {}
-                content.append({'type': 'tool_use', 'id': it.get('call_id') or it.get('id'), 'name': it.get('name'), 'input': args})
-        u = out.get('usage') or {}
-        log(dict(t='llm', model=out.get('model', OPENAI_MODEL), tier=out.get('service_tier'), ms=int((time.time() - t0) * 1000),
-                 usage=dict(input=u.get('input_tokens'), cached=(u.get('input_tokens_details') or {}).get('cached_tokens'), output=u.get('output_tokens'),
-                            reasoning=(u.get('output_tokens_details') or {}).get('reasoning_tokens'))))
-        return dict(content=content, stop_reason='tool_use' if any(b['type'] == 'tool_use' for b in content) else 'end_turn')
-    raise BladAPI(last or 'brak odpowiedzi')
-
-# --- PROVIDER=zgodny (dodane w paczce do pobrania): dowolne API zgodne z OpenAI Chat Completions ---
-# np. lokalny vLLM albo Ollama z polskim modelem, albo dostawca chmurowy. Dotyczy tylko rozmowy z asystentem:
-# rozpoznawanie i synteza mowy oraz tłumaczenie rozmowy dalej idą przez OpenAI (OPENAI_API_KEY), jeśli jest klucz.
-OPENAI_BAZA_DOMYSLNA = 'https://api.openai.com/v1'
-ZGODNY_BAZA = (os.environ.get('OPENAI_BASE_URL') or OPENAI_BAZA_DOMYSLNA).rstrip('/')
-ZGODNY_MODEL = (os.environ.get('MODEL') or '') if PROVIDER == 'zgodny' else ''
-ZGODNY_MAX = int(os.environ.get('MODEL_MAX_TOKENS') or 1500)
-ZGODNY_TIMEOUT = int(os.environ.get('MODEL_TIMEOUT') or 120)
+PROVIDER = bielik.PROVIDER
+OLLAMA_URL = bielik.OLLAMA_URL
+ZGODNY_BAZA = bielik.ZGODNY_BAZA
+MODEL = bielik.MODEL
+MODEL_API_KEY = bielik.MODEL_API_KEY
+MODEL_MAX_TOKENS = bielik.MAX_TOKENS
+MODEL_TIMEOUT = bielik.TIMEOUT
+MODEL_NUM_CTX = bielik.NUM_CTX
+MODEL_KEEP_ALIVE = bielik.KEEP_ALIVE
+ROZGRZEWANIE = bielik.ROZGRZEWANIE
 MYSLI = re.compile(r'(?s)<think>.*?</think>\s*')
+_stan = {}
+_stan_lock = threading.Lock()
+
+TOOLS_OLLAMA = [{'type': 'function', 'function': {'name': t['name'], 'description': t['description'], 'parameters': t['input_schema']}}
+                for t in WSZYSTKIE]
+TOOLS_OPENAI = [{'type': 'function', 'function': {'name': t['name'], 'description': t['description'], 'parameters': t['input_schema']}}
+                for t in WSZYSTKIE]
+
+
+class BladAPI(Exception):
+    pass
+
 
 def _id9(x):
     """Stały, 9-znakowy identyfikator wywołania (część szablonów czatu wymaga krótkich identyfikatorów)."""
     import hashlib
     return hashlib.sha1(str(x).encode()).hexdigest()[:9]
+
 
 def do_chat(messages):
     """Historia w formacie bloków (text/tool_use/tool_result) -> wiadomości Chat Completions."""
@@ -191,107 +102,322 @@ def do_chat(messages):
     for m in messages:
         c = m['content']
         if isinstance(c, str):
-            out.append({'role': m['role'], 'content': c}); continue
+            out.append({'role': m['role'], 'content': c})
+            continue
         txt = '\n\n'.join(b.get('text', '') for b in c if b.get('type') == 'text' and b.get('text', '').strip())
         if m['role'] == 'assistant':
             calls = [{'id': _id9(b['id']), 'type': 'function', 'function': {'name': b['name'], 'arguments': json.dumps(b.get('input') or {}, ensure_ascii=False)}}
                      for b in c if b.get('type') == 'tool_use']
             if txt or calls:
                 msg = {'role': 'assistant', 'content': txt}
-                if calls: msg['tool_calls'] = calls
+                if calls:
+                    msg['tool_calls'] = calls
                 out.append(msg)
             continue
         for b in c:
             if b.get('type') == 'tool_result':
                 o = b.get('content')
                 out.append({'role': 'tool', 'tool_call_id': _id9(b['tool_use_id']), 'content': o if isinstance(o, str) else json.dumps(o, ensure_ascii=False)})
-        if txt: out.append({'role': 'user', 'content': txt})
+        if txt:
+            out.append({'role': 'user', 'content': txt})
     return out
 
-def zgodny(messages, key, log):
-    if not ZGODNY_MODEL: raise BladAPI('PROVIDER=zgodny wymaga zmiennej MODEL')
-    tools = [{'type': 'function', 'function': {'name': t['name'], 'description': t['description'], 'parameters': t['input_schema']}} for t in WSZYSTKIE]
-    body = dict(model=ZGODNY_MODEL, messages=do_chat(messages), tools=tools, tool_choice='auto', parallel_tool_calls=False, max_tokens=ZGODNY_MAX)
+
+def _blad_modelu(txt, kod=None):
+    """Zamienia odpowiedź serwera modelu na czytelny komunikat po polsku (bez przełączania na płatne API)."""
+    if kod == 404 and 'model' in (txt or '').lower():
+        return BladAPI('Model %s nie jest pobrany. Uruchom: ollama pull %s' % (MODEL, MODEL))
+    if kod in (401, 403):
+        return BladAPI('Serwer modelu odrzucił żądanie (kod %s). Sprawdź MODEL_API_KEY.' % kod)
+    if kod == 429:
+        return BladAPI('Serwer modelu jest zajęty (za dużo żądań). Spróbuj za chwilę.')
+    if kod:
+        return BladAPI('Serwer modelu zwrócił błąd %s: %s' % (kod, (txt or '')[:200]))
+    return BladAPI(txt or 'brak odpowiedzi modelu')
+
+
+def _adres_modelu():
+    return OLLAMA_URL if PROVIDER != 'zgodny' else ZGODNY_BAZA
+
+
+def _podlacz(req, timeout):
+    """Pojedyncze żądanie HTTP do serwera modelu; błędy sieci dostają komunikat po polsku."""
+    try:
+        with urllib.request.urlopen(req, timeout=timeout) as r:
+            return json.loads(r.read())
+    except urllib.error.HTTPError as e:
+        raise _blad_modelu(e.read().decode('utf-8', 'replace'), e.code)
+    except (urllib.error.URLError, ConnectionError, OSError) as e:
+        raise BladAPI('Nie mogę połączyć się z modelem pod adresem %s. Sprawdź, czy Ollama działa (ollama serve). (%s)'
+                      % (_adres_modelu(), getattr(e, 'reason', e)))
+
+
+def _tekst_z_odpowiedzi(txt):
+    if isinstance(txt, list):
+        txt = ''.join(p.get('text', '') for p in txt if isinstance(p, dict))
+    return MYSLI.sub('', txt or '').strip()
+
+
+def _wywolania(calls):
+    """Jedna czynność naraz, tak jak u wszystkich dostawców."""
+    out = []
+    for i, c in enumerate((calls or [])[:1]):
+        f = c.get('function') or c
+        a = f.get('arguments')
+        if isinstance(a, str):
+            try:
+                a = json.loads(a or '{}')
+            except Exception:
+                a = {}
+        out.append(dict(type='tool_use', id=c.get('id') or _id9('%s-%d-%d' % (f.get('name'), i, time.time() * 1000)),
+                        name=f.get('name'), input=a if isinstance(a, dict) else {}))
+    return out
+
+
+def ollama(messages, log):
+    """Rozmowa z modelem przez natywne API Ollamy (num_ctx, keep_alive, narzędzia)."""
+    body = dict(model=MODEL, messages=do_chat(messages), tools=TOOLS_OLLAMA, stream=False,
+                keep_alive=MODEL_KEEP_ALIVE, options=dict(bielik.OPCJE))
+    ostatni = None
+    for proba in range(2):
+        req = urllib.request.Request(OLLAMA_URL + '/api/chat', data=json.dumps(body).encode(),
+                                     headers={'Content-Type': 'application/json'})
+        t0 = time.time()
+        try:
+            out = _podlacz(req, MODEL_TIMEOUT)
+        except BladAPI as e:
+            ostatni = str(e)
+            if proba == 0 and 'Nie mogę połączyć' in ostatni:
+                time.sleep(1.0)
+                continue
+            raise
+        msg = out.get('message') or {}
+        content = []
+        txt = _tekst_z_odpowiedzi(msg.get('content'))
+        if txt:
+            content.append(dict(type='text', text=txt))
+        content += _wywolania(msg.get('tool_calls'))
+        log(dict(t='llm', model=out.get('model', MODEL), provider='ollama', ms=int((time.time() - t0) * 1000),
+                 usage=dict(input=out.get('prompt_eval_count'), output=out.get('eval_count')), stop=out.get('done_reason')))
+        return dict(content=content, stop_reason='tool_use' if any(b['type'] == 'tool_use' for b in content) else 'end_turn')
+    raise BladAPI(ostatni or 'brak odpowiedzi modelu')
+
+
+def zgodny(messages, log):
+    """Dowolne API zgodne z OpenAI Chat Completions (vLLM z szablonem czatu Bielika, llama.cpp, LM Studio)."""
+    if not MODEL:
+        raise BladAPI('PROVIDER=zgodny wymaga zmiennej MODEL')
+    body = dict(model=MODEL, messages=do_chat(messages), tools=TOOLS_OPENAI, tool_choice='auto',
+                parallel_tool_calls=False, stop=list(bielik.STOP), **bielik.OPCJE_ZGODNE)
     naglowki = {'Content-Type': 'application/json'}
-    if key and key != 'bez-klucza': naglowki['Authorization'] = 'Bearer ' + key
-    last = None
-    for proba in range(4):
+    if MODEL_API_KEY:
+        naglowki['Authorization'] = 'Bearer ' + MODEL_API_KEY
+    ostatni = None
+    for proba in range(2):
         req = urllib.request.Request(ZGODNY_BAZA + '/chat/completions', data=json.dumps(body).encode(), headers=naglowki)
         t0 = time.time()
         try:
-            with urllib.request.urlopen(req, timeout=ZGODNY_TIMEOUT) as r:
-                out = json.loads(r.read())
-        except urllib.error.HTTPError as e:
-            txt = e.read().decode('utf-8', 'replace'); last = '%s %s' % (e.code, txt[:400])
-            if e.code == 400 and 'parallel_tool_calls' in txt and 'parallel_tool_calls' in body:
-                body.pop('parallel_tool_calls'); continue
-            if e.code in (429, 500, 502, 503) and proba < 3:
-                time.sleep(1.5 * (proba + 1)); continue
-            raise BladAPI(last)
-        except Exception as e:
-            last = str(e); time.sleep(1.0 * (proba + 1)); continue
+            out = _podlacz(req, MODEL_TIMEOUT)
+        except BladAPI as e:
+            ostatni = str(e)
+            if proba == 0 and 'parallel_tool_calls' in ostatni and 'parallel_tool_calls' in body:
+                body.pop('parallel_tool_calls')
+                continue
+            if proba == 0 and 'Nie mogę połączyć' in ostatni:
+                time.sleep(1.0)
+                continue
+            raise
         msg = ((out.get('choices') or [{}])[0] or {}).get('message') or {}
         content = []
-        txt = msg.get('content')
-        if isinstance(txt, list): txt = ''.join(p.get('text', '') for p in txt if isinstance(p, dict))
-        txt = MYSLI.sub('', txt or '').strip()
-        if txt: content.append({'type': 'text', 'text': txt})
-        for c in (msg.get('tool_calls') or [])[:1]:   # jedna czynność naraz, jak u pozostałych dostawców
-            f = c.get('function') or {}
-            a = f.get('arguments')
-            if not isinstance(a, dict):
-                try: a = json.loads(a or '{}')
-                except Exception: a = {}
-            content.append({'type': 'tool_use', 'id': c.get('id') or 'z%d' % int(time.time() * 1000), 'name': f.get('name'), 'input': a if isinstance(a, dict) else {}})
+        txt = _tekst_z_odpowiedzi(msg.get('content'))
+        if txt:
+            content.append(dict(type='text', text=txt))
+        content += _wywolania(msg.get('tool_calls'))
         u = out.get('usage') or {}
-        log(dict(t='llm', model=out.get('model', ZGODNY_MODEL), ms=int((time.time() - t0) * 1000),
+        log(dict(t='llm', model=out.get('model', MODEL), provider='zgodny', ms=int((time.time() - t0) * 1000),
                  usage=dict(input=u.get('prompt_tokens'), output=u.get('completion_tokens'))))
         return dict(content=content, stop_reason='tool_use' if any(b['type'] == 'tool_use' for b in content) else 'end_turn')
-    raise BladAPI(last or 'brak odpowiedzi')
+    raise BladAPI(ostatni or 'brak odpowiedzi modelu')
+
+
+ZNACZNIKOW_NA_TOKEN = 3
+REZERWA_TOKENOW = 512
+
+
+def _rozmiar(wiadomosc):
+    tresc = wiadomosc.get('content')
+    return len(tresc) if isinstance(tresc, str) else len(json.dumps(tresc, ensure_ascii=False))
+
+
+def _tylko_wyniki(wiadomosc):
+    tresc = wiadomosc.get('content')
+    return (wiadomosc.get('role') == 'user' and isinstance(tresc, list) and bool(tresc)
+            and all(b.get('type') == 'tool_result' for b in tresc))
+
+
+def zajete_tokeny():
+    """Ile tokenów zjada to, czego przyciąć nie można: instrukcja systemowa i definicje narzędzi."""
+    return (len(system_prompt()) + len(json.dumps(TOOLS_OLLAMA, ensure_ascii=False))) // ZNACZNIKOW_NA_TOKEN
+
+
+def przytnij(messages, dostepne=None):
+    """Zostawia najnowszą część historii mieszczącą się w oknie kontekstu.
+
+    Okno musi pomieścić instrukcję systemową, opisy narzędzi i odpowiedź modelu, a historia rośnie
+    z każdą turą. Bez przycinania Ollama po cichu obcina początek promptu, więc Bielik traci instrukcję
+    i przestaje wywoływać narzędzia.
+    """
+    dostepne = MODEL_NUM_CTX - MODEL_MAX_TOKENS - REZERWA_TOKENOW - zajete_tokeny() if dostepne is None else dostepne
+    if dostepne <= 0:
+        return messages[-1:]
+    suma, start = 0, len(messages)
+    for i in range(len(messages) - 1, -1, -1):
+        suma += _rozmiar(messages[i]) // ZNACZNIKOW_NA_TOKEN
+        if suma > dostepne:
+            break
+        start = i
+    while start < len(messages) and (messages[start].get('role') != 'user' or _tylko_wyniki(messages[start])):
+        start += 1
+    return messages[start:] if start < len(messages) else messages[-1:]
+
 
 def llm(messages, keys, log):
-    if PROVIDER == 'anthropic': return claude(messages, keys['anthropic'], log)
-    if PROVIDER == 'zgodny': return zgodny(messages, keys.get('zgodny'), log)
-    return openai(messages, keys['openai'], log)
+    try:
+        bielik.wymagaj_bielika()
+    except ValueError as e:
+        raise BladAPI(str(e))
+    przyciete = przytnij(messages)
+    if len(przyciete) < len(messages):
+        log(dict(t='kontekst', wszystkich=len(messages), wyslanych=len(przyciete), zajete=zajete_tokeny(), okno=MODEL_NUM_CTX))
+    if PROVIDER == 'zgodny':
+        return zgodny(przyciete, log)
+    return ollama(przyciete, log)
+
+
+def stan_modelu(odswiez=False):
+    """Czy model jest dostępny w lokalnym serwerze. Wynik trzymamy chwilę, żeby /api/health był szybki."""
+    with _stan_lock:
+        teraz = time.time()
+        if not odswiez and _stan and teraz - _stan.get('t', 0) < 5:
+            return _stan
+        wynik = dict(t=teraz, ok=False, model=MODEL, provider=PROVIDER, bielik=bielik.czy_bielik(), komunikat='')
+        try:
+            if PROVIDER == 'zgodny':
+                with urllib.request.urlopen(ZGODNY_BAZA + '/models', timeout=4) as r:
+                    odp = json.loads(r.read())
+                dostepne = [m.get('id') for m in (odp.get('data') or [])]
+                wynik.update(ok=MODEL in dostepne, dostepne=dostepne)
+                if not wynik['ok']:
+                    wynik['komunikat'] = 'Model %s nie jest widoczny pod %s. Sprawdź MODEL.' % (MODEL, ZGODNY_BAZA)
+            else:
+                with urllib.request.urlopen(OLLAMA_URL + '/api/tags', timeout=4) as r:
+                    odp = json.loads(r.read())
+                dostepne = [m.get('name') for m in (odp.get('models') or [])]
+                wynik.update(ok=any(n == MODEL or n.split(':')[0] == MODEL.split(':')[0] for n in dostepne), dostepne=dostepne)
+                if not wynik['ok']:
+                    wynik['komunikat'] = 'Model %s nie jest pobrany. Uruchom: ollama pull %s' % (MODEL, MODEL)
+        except Exception as e:
+            if PROVIDER == 'zgodny':
+                wynik['komunikat'] = 'Nie mogę połączyć się z serwerem modelu %s (%s)' % (ZGODNY_BAZA, e)
+            else:
+                wynik['komunikat'] = 'Nie mogę połączyć się z Ollamą pod %s. Uruchom: ollama serve' % OLLAMA_URL
+        if not wynik['bielik']:
+            wynik['komunikat'] = bielik.komunikat_modelu()
+            if bielik.TYLKO_BIELIK:
+                wynik['ok'] = False
+        _stan.clear()
+        _stan.update(wynik)
+        return wynik
+
+
+def rozgrzej():
+    """Wczytuje model do pamięci, żeby pierwsza odpowiedź nie czekała na ładowanie wag."""
+    if not ROZGRZEWANIE or PROVIDER == 'zgodny':
+        return
+    try:
+        body = dict(model=MODEL, messages=[{'role': 'user', 'content': 'Dzień dobry'}], stream=False,
+                    keep_alive=MODEL_KEEP_ALIVE,
+                    options=dict(num_ctx=MODEL_NUM_CTX, num_predict=8, temperature=bielik.TEMPERATURE))
+        req = urllib.request.Request(OLLAMA_URL + '/api/chat', data=json.dumps(body).encode(),
+                                     headers={'Content-Type': 'application/json'})
+        with urllib.request.urlopen(req, timeout=MODEL_TIMEOUT) as r:
+            r.read()
+    except Exception:
+        pass
+
 
 WYCIEK = re.compile(r'\s*(?:to=)?functions\.(\w+)\s*(\{.*?\})', re.S)
+JSONOWE = re.compile(r'```(?:json)?\s*|\{')
+NAZWY_NARZEDZI = {t['name'] for t in WSZYSTKIE}
+
+
+def _wywolanie_z_jsonu(tekst):
+    """Bielik czasem odpowiada wyłącznie JSON-em {"name": ..., "arguments": {...}} zamiast tool_calls.
+
+    Zwraca (wywołanie, tekst_bez_jsonu) albo (None, tekst).
+    """
+    dekoder = json.JSONDecoder()
+    for m in JSONOWE.finditer(tekst):
+        poczatek = tekst.index('{', m.start())
+        try:
+            obiekt, koniec = dekoder.raw_decode(tekst[poczatek:])
+        except ValueError:
+            continue
+        if not isinstance(obiekt, dict) or obiekt.get('name') not in NAZWY_NARZEDZI:
+            continue
+        argumenty = obiekt.get('arguments', obiekt.get('parameters'))
+        if isinstance(argumenty, str):
+            try:
+                argumenty = json.loads(argumenty or '{}')
+            except ValueError:
+                argumenty = {}
+        reszta = (tekst[:m.start()] + tekst[poczatek + koniec:]).strip()
+        reszta = re.sub(r'```(?:json)?', '', reszta).strip()
+        return dict(type='tool_use', id='json_%d' % int(time.time() * 1000), name=obiekt['name'],
+                    input=argumenty if isinstance(argumenty, dict) else {}), reszta
+    return None, tekst
+
+
 def napraw_wyciek(content):
-    """Model czasem wypisuje wywołanie narzędzia w tekście (np. 'to=functions.x {...}'). Zamieniamy to na prawdziwe wywołanie."""
+    """Zamienia wywołanie narzędzia wypisane w tekście na prawdziwe wywołanie.
+
+    Obsługuje dwa warianty, które zdarzają się Bielikowi: `to=functions.x {...}` oraz sam JSON
+    {"name": ..., "arguments": {...}} (tak działa modelfile Bielika dla narzędzi).
+    """
     out = []
     for b in content:
-        if b['type'] != 'text' or 'functions.' not in b.get('text', ''):
+        if b['type'] != 'text':
             out.append(b); continue
-        m = WYCIEK.search(b['text'])
-        txt = b['text'][:m.start()].strip() if m else re.sub(r'(?s)\s*(?:to=)?functions\..*$', '', b['text']).strip()
-        if txt: out.append(dict(type='text', text=txt))
-        if m and not any(x['type'] == 'tool_use' for x in content):
-            try:
-                out.append(dict(type='tool_use', id='wyciek_%d' % int(time.time() * 1000), name=m.group(1), input=json.loads(m.group(2))))
-            except Exception:
-                pass
+        tekst = b.get('text', '')
+        m = WYCIEK.search(tekst)
+        if m:
+            txt = tekst[:m.start()].strip() or re.sub(r'(?s)\s*(?:to=)?functions\..*$', '', tekst).strip()
+            if txt: out.append(dict(type='text', text=txt))
+            if not any(x['type'] == 'tool_use' for x in content):
+                try:
+                    out.append(dict(type='tool_use', id='wyciek_%d' % int(time.time() * 1000), name=m.group(1), input=json.loads(m.group(2))))
+                except Exception:
+                    pass
+            continue
+        if '"name"' in tekst and not any(x['type'] == 'tool_use' for x in content):
+            wywolanie, reszta = _wywolanie_z_jsonu(tekst)
+            if wywolanie:
+                if reszta: out.append(dict(type='text', text=reszta))
+                out.append(wywolanie)
+                continue
+        if tekst.strip():
+            out.append(b)
     return out
 
 OBCE = re.compile('[\u0370-\u03ff\u0400-\u052f\u0590-\u06ff\u10a0-\u10ff\u3040-\u30ff\u4e00-\u9fff]')
-def popraw_jezyk(text, keys, log):
-    """Gdy model wtrąci obce słowo (np. cyrylicą), poprawiamy tekst osobnym, krótkim wywołaniem."""
-    if not OBCE.search(text): return text
-    try:
-        if PROVIDER == 'openai':
-            body = dict(model=OPENAI_MODEL, instructions='Popraw tekst na poprawną polszczyznę: każde słowo w obcym języku lub alfabecie zastąp właściwym polskim słowem. Nie zmieniaj sensu ani formatowania (**pogrubienia** zostaw). Zwróć wyłącznie poprawiony tekst.',
-                        input=text, max_output_tokens=600, store=False, reasoning={'effort': 'low'})
-            if OPENAI_TIER: body['service_tier'] = OPENAI_TIER
-            req = urllib.request.Request('https://api.openai.com/v1/responses', data=json.dumps(body).encode(), headers={'Authorization': 'Bearer ' + keys['openai'], 'Content-Type': 'application/json'})
-            with urllib.request.urlopen(req, timeout=30) as r: out = json.loads(r.read())
-            fixed = ''.join(p.get('text', '') for it in out.get('output', []) if it.get('type') == 'message' for p in it.get('content', []) if p.get('type') in ('output_text', 'text')).strip()
-        else:
-            fixed = ''
-        if fixed and not OBCE.search(fixed):
-            log(dict(t='jezyk', przed=text, po=fixed)); return fixed
-    except Exception as e:
-        log(dict(t='jezyk_blad', msg=str(e)))
-    for k_, v in {'Если': 'Jeśli', 'если': 'jeśli', 'или': 'lub', 'нет': 'nie', 'да': 'tak', 'но': 'ale', 'и': 'i'}.items():
-        text = re.sub(r'(?<![\w])' + k_ + r'(?![\w])', v, text)
+def popraw_jezyk(text):
+    """Bielik pisze po polsku; gdy mimo to wtrąci obce słowo albo alfabet, usuwamy je lokalnie, bez dodatkowych wywołań."""
+    if not OBCE.search(text):
+        return text
+    for obce, polskie in {'Если': 'Jeśli', 'если': 'jeśli', 'или': 'lub', 'нет': 'nie', 'да': 'tak', 'но': 'ale', 'и': 'i'}.items():
+        text = re.sub(r'(?<![\w])' + obce + r'(?![\w])', polskie, text)
     return OBCE.sub('', text).replace('  ', ' ')
+
 
 def napraw(messages):
     """Każdy tool_use musi mieć tool_result w następnej wiadomości użytkownika."""
@@ -327,43 +453,20 @@ def wykonaj_odczyt(name, a, stan):
 
 PREFIKS = re.compile(r'^(\[(?:głos|zdjęcie)\]\s*)')
 KONIEC = re.compile(r'\b(to wszystko|to by było wszystko|nic więcej|do widzenia|do usłyszenia|na razie|pa,? pa|żegnaj|cześć!?$|kończ(ymy|my)?\b|zakończ)', re.I)
-def run(messages, stan, confirm=None, keys=None, log=lambda x: None, osoba=None, jezyk='pl'):
+def run(messages, stan, confirm=None, log=lambda x: None, osoba=None, jezyk='pl'):
     """Zwraca (messages, stan, events, czeka). osoba: id persony (persony.py), jezyk: kod języka interfejsu.
-    Agent zawsze pracuje po polsku: wiadomość użytkownika tłumaczymy na polski (i tak zostaje w historii), a odpowiedzi, przyciski i karty na język interfejsu."""
-    j = jezyk if jezyk in tlumacz.JEZYKI else 'pl'
-    key = (keys or {}).get('openai')
-    if j != 'pl' and messages and messages[-1].get('role') == 'user' and isinstance(messages[-1].get('content'), str) and not confirm \
-            and not re.search(r'[ąęłśźżĄĘŁŚŹŻ]', PREFIKS.sub('', messages[-1]['content'])):   # wiadomość po polsku idzie bez tłumaczenia (prefiks [głos] ma „ł”)
-        t0 = time.time(); txt = messages[-1]['content']; m = PREFIKS.match(txt); pre = m.group(1) if m else ''
-        pl_txt = tlumacz.tlumacz_wolne([txt[len(pre):]], 'auto', 'pl', key)[0]
-        messages[-1] = dict(messages[-1], content=pre + pl_txt)
-        log(dict(t='tlumacz_wej', jezyk=j, ms=int((time.time() - t0) * 1000), przed=txt[:120], po=pl_txt[:120]))
+
+    Agent rozmawia wyłącznie po polsku na lokalnym modelu Bielik. Interfejs tłumaczą słowniki w serwer/i18n,
+    a treści z rejestrów zostają po polsku (nie ma tłumaczenia maszynowego i płatnych API)."""
     ostatnia = messages[-1]['content'] if messages and not confirm and isinstance(messages[-1].get('content'), str) else ''
-    m, s, ev, cz = _run(messages, stan, confirm, keys, log, osoba)
+    m, s, ev, cz = _run(messages, stan, confirm, log, osoba)
     if not cz and ev and all(e.get('t') == 'text' for e in ev) and not ev[-1]['plain'].rstrip().endswith('?') and KONIEC.search(PREFIKS.sub('', ostatnia)):
-        ev.append(dict(t='koniec')); cz = 'koniec'   # model pożegnał się bez zakoncz_rozmowe
+        ev.append(dict(t='koniec'))
+        cz = 'koniec'
         log(dict(t='koniec_auto'))
     dodaj_mowe(ev)
-    if j != 'pl':
-        t0 = time.time()
-        wolne = [(e, 'md', None) for e in ev if e.get('t') == 'text'] + [(e, 'mow', None) for e in ev if e.get('mow')] \
-              + [(e, 'opcje', i) for e in ev if e.get('t') in ('chips', 'multi') for i in range(len(e.get('opcje') or []))]
-        teksty = [e[f] if i is None else e['opcje'][i] for e, f, i in wolne]
-        wynik = {}
-        def karty():
-            try: tlumacz.tlumacz_zdarzenia(ev, j, key)
-            except Exception as ex: log(dict(t='tlumacz_blad', msg=str(ex)))
-        th = threading.Thread(target=karty); th.start()
-        if teksty: wynik['t'] = tlumacz.tlumacz_wolne(teksty, 'pl', j, key)
-        th.join()
-        for (e, f, i), t in zip(wolne, wynik.get('t') or teksty):
-            if f == 'md': e.update(md=t, html=md(t), plain=bez_myslnikow(re.sub(r'\*\*', '', t).strip()))
-            elif f == 'mow': e['mow'] = t
-            else: e['opcje'][i] = t
-        for e in ev:
-            if e.get('t') in ('chips', 'multi', 'text'): e['tl'] = 1
-        log(dict(t='tlumacz_wyj', jezyk=j, ms=int((time.time() - t0) * 1000), n=len(teksty)))
     return m, s, ev, cz
+
 
 def dodaj_mowe(ev):
     """Tryb głosowy czyta pole mow: przy karcie potwierdzenia i przy przyciskach, gdy w turze nie ma tekstu (inaczej asystent milczy)."""
@@ -376,7 +479,7 @@ def dodaj_mowe(ev):
         if e.get('t') not in ('chips', 'multi') or not o: continue
         e['mow'] = ('Możesz wybrać kilka: ' + ', '.join(o) if e['t'] == 'multi' else 'Do wyboru: ' + (', '.join(o[:-1]) + ' albo ' + o[-1] if len(o) > 1 else o[0])) + '.'
 
-def _run(messages, stan, confirm, keys, log, osoba):
+def _run(messages, stan, confirm, log, osoba):
     _JEZ.j = 'pl'
     persony.ustaw(osoba)
     stan = stan or dane.stan_poczatkowy()
@@ -405,10 +508,10 @@ def _run(messages, stan, confirm, keys, log, osoba):
     po_akcji = bool(confirm)
     czeka = None
     for krok in range(10):
-        out = llm(messages, keys, log)
+        out = llm(messages, {}, log)
         content = napraw_wyciek([b for b in out['content'] if b.get('type') in ('text', 'tool_use')])
         for b in content:
-            if b['type'] == 'text': b['text'] = popraw_jezyk(b['text'], keys, log)
+            if b['type'] == 'text': b['text'] = popraw_jezyk(b['text'])
         content = [dict(type='text', text=b['text']) if b['type'] == 'text' else dict(type='tool_use', id=b['id'], name=b['name'], input=b.get('input') or {}) for b in content if b['type'] != 'text' or b['text'].strip()]
         if not content:
             messages.append({'role': 'assistant', 'content': [dict(type='text', text='(brak odpowiedzi)')]}); break

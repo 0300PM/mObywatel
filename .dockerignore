@@ -1,3 +1,5 @@
 .env
+.idea
 **/agent.log
 **/__pycache__
+frontend/node_modules

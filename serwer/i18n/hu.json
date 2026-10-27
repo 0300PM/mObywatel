@@ -1986,5 +1986,17 @@
 "−{0} gr/l": "−{0} gr/l",
 "✓ Tożsamość potwierdzona przez mObywatel": "✓ Az mObywatel megerősítette a személyazonosságot",
 "📷 zdjęcie dowodu rejestracyjnego": "📷 fénykép a forgalmi engedélyről",
-"📷 {0} zdjęcia": "📷 {0} fotó"
+"📷 {0} zdjęcia": "📷 {0} fotó",
+"Skrzynka": "Beérkezett",
+"Dotknij karty, aby ją otworzyć": "Koppintson a kártyára a megnyitáshoz",
+"Dotknij stosu, aby wrócić do dokumentów": "Koppintson a kötegre a dokumentumokhoz való visszatéréshez",
+"Odpowiada lokalny model Bielik. Ważne informacje sprawdź na karcie sprawy.": "A helyi Bielik modell válaszol. A fontos információkat az ügy kártyáján ellenőrizze.",
+"Wynajem (3 doby)": "Bérlés (3 nap)",
+"automat · 5 miejsc · klimatyzacja": "automata · 5 ülés · klíma",
+"lub podobny": "vagy hasonló",
+"Ta przeglądarka nie obsługuje rozpoznawania mowy": "Ez a böngésző nem támogatja a beszédfelismerést",
+"Sprawdź moją skrzynkę": "Beérkezett üzenetek ellenőrzése",
+"Płatność przyjęta. Rezerwacja potwierdzona, kluczyki czekają w wypożyczalni.": "Fizetés elfogadva. A foglalás megerősítve, a kulcsok a bérlőpultnál várják.",
+"Przetwarzam płatność…": "Fizetés feldolgozása…",
+"Ta przeglądarka nie obsługuje rozpoznawania mowy. Napisz wiadomość tekstem.": "Ez a böngésző nem támogatja a beszédfelismerést. Írja be üzenetét."
 }

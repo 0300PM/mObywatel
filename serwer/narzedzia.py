@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""Definicje narzędzi dla Claude (JSON Schema)."""
+"""Definicje narzędzi dla modelu (JSON Schema): odczyty, akcje, elementy interfejsu i znak mObywatela."""
 
 def S(t='string', d=None, e=None, items=None):
     x = {'type': t}

@@ -1,9 +1,11 @@
+# Frontend jest już zbudowany (frontend/dist). Przebudowa: cd frontend && npm ci && npm run build
 # Serwer używa wyłącznie biblioteki standardowej Pythona, więc nie ma kroku pip install.
 FROM python:3-slim
-ENV PYTHONUNBUFFERED=1 PYTHONDONTWRITEBYTECODE=1 HOST=0.0.0.0 PORT=8790
+ENV PYTHONUNBUFFERED=1 PYTHONDONTWRITEBYTECODE=1 HOST=0.0.0.0 PORT=8790 \
+    PROVIDER=ollama MODEL=SpeakLeash/bielik-11b-v3.0-instruct:Q4_K_M BIELIK_TYLKO=1 MODEL_NUM_CTX=32768
 WORKDIR /app
 COPY serwer/ serwer/
-COPY mockup/ mockup/
+COPY frontend/dist/ frontend/dist/
 RUN useradd --create-home --uid 10001 mobywatel && chown -R mobywatel /app
 USER mobywatel
 EXPOSE 8790

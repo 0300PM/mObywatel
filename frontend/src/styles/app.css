@@ -1,0 +1,154 @@
+@import 'tailwindcss';
+
+@theme {
+  --color-bg: #f2f3f7;
+  --color-surface: #ffffff;
+  --color-ink: #111216;
+  --color-ink-2: #5f6270;
+  --color-ink-3: #8b8e9a;
+  --color-line: #e3e5eb;
+  --color-brand: #dc143c;
+  --color-brand-dark: #b30f30;
+  --color-brand-wash: #fdecef;
+  --color-ok: #2e7d32;
+  --color-ok-wash: #e9f5ea;
+  --color-warn: #9a5a00;
+  --color-warn-wash: #fff3df;
+  --font-sans: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Inter', system-ui, sans-serif;
+  --ease-soft: cubic-bezier(0.22, 0.9, 0.24, 1);
+}
+
+@layer base {
+  html,
+  body,
+  #app {
+    height: 100%;
+  }
+
+  body {
+    margin: 0;
+    background: #d9dce4;
+    color: var(--color-ink);
+    font-family: var(--font-sans);
+    -webkit-font-smoothing: antialiased;
+  }
+
+  button {
+    font: inherit;
+    color: inherit;
+    border: 0;
+    background: none;
+    cursor: pointer;
+    padding: 0;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  button:focus-visible,
+  input:focus-visible {
+    outline: 2px solid var(--color-brand);
+    outline-offset: 2px;
+  }
+
+  svg {
+    display: block;
+  }
+}
+
+@layer components {
+  .ekran-aplikacji {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 100vh;
+    min-height: 100dvh;
+    padding: 24px;
+  }
+
+  .ramka-telefonu {
+    position: relative;
+    display: flex;
+    flex: none;
+    flex-direction: column;
+    width: 390px;
+    height: 844px;
+    max-height: calc(100dvh - 48px);
+    border-radius: 54px;
+    overflow: hidden;
+    background: var(--color-bg);
+    box-shadow: 0 0 0 10px #16171a, 0 0 0 11px #3b3d42, 0 50px 90px -20px rgba(20, 22, 30, 0.45);
+  }
+
+  @media (max-width: 520px) {
+    body {
+      background: var(--color-bg);
+    }
+
+    .ekran-aplikacji {
+      min-height: 100dvh;
+      padding: 0;
+    }
+
+    .ramka-telefonu {
+      width: 100vw;
+      height: 100dvh;
+      border-radius: 0;
+      box-shadow: none;
+    }
+  }
+}
+
+@utility scrollbar-none {
+  scrollbar-width: none;
+
+  &::-webkit-scrollbar {
+    display: none;
+  }
+}
+
+@keyframes unos {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+}
+
+@keyframes kropka {
+  0%,
+  60%,
+  100% {
+    opacity: 0.3;
+  }
+  30% {
+    opacity: 1;
+  }
+}
+
+@keyframes tchnienie {
+  50% {
+    transform: scale(1.4);
+  }
+}
+
+.anim-unos {
+  animation: unos 0.3s var(--ease-soft) both;
+}
+
+.anim-kropka {
+  animation: kropka 1s infinite;
+}
+
+.anim-tchnienie {
+  animation: tchnienie 1s infinite;
+}
+
+.sylwetka {
+  width: 100%;
+  height: 100%;
+}
+
+.znak svg,
+.znak {
+  display: block;
+  width: 100%;
+  height: 100%;
+}

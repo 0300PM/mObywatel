@@ -1986,5 +1986,17 @@
 "−{0} gr/l": "−{0} gr/l",
 "✓ Tożsamość potwierdzona przez mObywatel": "✓ Identity confirmed by mObywatel",
 "📷 zdjęcie dowodu rejestracyjnego": "📷 photo of the vehicle registration certificate",
-"📷 {0} zdjęcia": "📷 {0} photos"
+"📷 {0} zdjęcia": "📷 {0} photos",
+"Skrzynka": "Inbox",
+"Dotknij karty, aby ją otworzyć": "Tap the card to open it",
+"Dotknij stosu, aby wrócić do dokumentów": "Tap the stack to go back to documents",
+"Odpowiada lokalny model Bielik. Ważne informacje sprawdź na karcie sprawy.": "Powered by the local Bielik model. Check important information on the case card.",
+"Wynajem (3 doby)": "Rental (3 days)",
+"automat · 5 miejsc · klimatyzacja": "automatic · 5 seats · air conditioning",
+"lub podobny": "or similar",
+"Ta przeglądarka nie obsługuje rozpoznawania mowy": "This browser does not support speech recognition",
+"Sprawdź moją skrzynkę": "Check my inbox",
+"Płatność przyjęta. Rezerwacja potwierdzona, kluczyki czekają w wypożyczalni.": "Payment accepted. Booking confirmed, the keys are waiting at the rental desk.",
+"Przetwarzam płatność…": "Processing payment…",
+"Ta przeglądarka nie obsługuje rozpoznawania mowy. Napisz wiadomość tekstem.": "This browser does not support speech recognition. Please type your message."
 }
